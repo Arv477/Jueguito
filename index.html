@@ -371,6 +371,10 @@ body.touch #touchControls{
   pointer-events:auto;
 }
 
+body:not(.touch) #touchControls{
+  display:none;
+}
+
 .dpad{
   position:absolute;
   left:4vw;
@@ -2544,6 +2548,8 @@ if(isTouchDevice && dialogHint){
   dialogHint.textContent = "B";
 }
 let talking = false;
+let lastActionAt = 0;
+const ACTION_COOLDOWN = 160;
 
 const DIALOG_MAX_CHARS = 140;
 const dialogState = {
@@ -2629,6 +2635,12 @@ function handleJumpPress(){
 
 function handleActionPress(){
   if(gameOver) return;
+
+  if(isTouchDevice){
+    const now = performance.now();
+    if(now - lastActionAt < ACTION_COOLDOWN) return;
+    lastActionAt = now;
+  }
 
   if(talking){
     advanceDialog();
@@ -3161,6 +3173,7 @@ let screen = {
 };
 
 function computeZoom(){
+  if(!isTouchDevice) return baseZoom;
   const minSide = Math.min(window.innerWidth, window.innerHeight);
   if(minSide <= 420) return 2.1;
   if(minSide <= 560) return 2.4;
