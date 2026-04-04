@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Pueblo</title>
 
 <style>
@@ -21,6 +22,8 @@ body{
   font-family:var(--pixel-font);
   -webkit-font-smoothing:none;
   text-rendering:optimizeSpeed;
+  overflow:hidden;
+  touch-action:none;
 }
 
 *{
@@ -33,6 +36,11 @@ body{
   height:100%;
   overflow:hidden;
   background:#000;
+  width:100vw;
+  height:100vh;
+  max-width:100vw;
+  max-height:100vh;
+  touch-action:none;
 }
 
 #world{
@@ -271,6 +279,10 @@ body{
   z-index:99999;
 }
 
+body.touch #dialog{
+  bottom:26vh;
+}
+
 .dialog-inner{
   padding:18px 20px 14px;
   display:flex;
@@ -344,6 +356,132 @@ body{
   background:#3a3a3a;
 }
 
+/* CONTROLES ANDROID */
+#touchControls{
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:99998;
+  opacity:0;
+  transition:opacity 0.2s ease;
+}
+
+body.touch #touchControls{
+  opacity:1;
+  pointer-events:auto;
+}
+
+.dpad{
+  position:absolute;
+  left:4vw;
+  bottom:4vh;
+  width:28vmin;
+  height:28vmin;
+  max-width:180px;
+  max-height:180px;
+  min-width:120px;
+  min-height:120px;
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  grid-template-rows:repeat(3, 1fr);
+  gap:6px;
+}
+
+.dpad-btn,
+.action-btn{
+  background:linear-gradient(180deg, #5a5a5a, #2e2e2e);
+  border:3px solid #0f0f0f;
+  box-shadow:inset 0 3px 0 rgba(255,255,255,0.12), 0 4px 0 #000;
+  border-radius:10px;
+  image-rendering:pixelated;
+  touch-action:none;
+}
+
+.dpad-btn{
+  width:100%;
+  height:100%;
+}
+
+.dpad-btn.up{ grid-column:2; grid-row:1; }
+.dpad-btn.left{ grid-column:1; grid-row:2; }
+.dpad-btn.right{ grid-column:3; grid-row:2; }
+.dpad-btn.down{ grid-column:2; grid-row:3; }
+
+.dpad-btn:active,
+.action-btn:active{
+  transform:translateY(2px);
+  box-shadow:inset 0 2px 0 rgba(255,255,255,0.1), 0 2px 0 #000;
+}
+
+.buttons{
+  position:absolute;
+  right:4vw;
+  bottom:6vh;
+  display:flex;
+  gap:16px;
+  align-items:flex-end;
+}
+
+.action-btn{
+  width:18vmin;
+  height:18vmin;
+  max-width:120px;
+  max-height:120px;
+  min-width:80px;
+  min-height:80px;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#f1f1f1;
+  font-size:18px;
+  letter-spacing:1px;
+  user-select:none;
+}
+
+.action-btn.small{
+  width:14vmin;
+  height:14vmin;
+  max-width:90px;
+  max-height:90px;
+  min-width:64px;
+  min-height:64px;
+  font-size:14px;
+}
+
+.action-btn span{
+  text-shadow:2px 2px 0 #000;
+}
+
+@media (max-width: 720px){
+  #hud{
+    transform:scale(0.8);
+    transform-origin:top left;
+  }
+  #coinCount{
+    font-size:16px;
+  }
+  .heart{
+    width:44px;
+    height:44px;
+  }
+  #dialogText{
+    font-size:14px;
+  }
+  #dialogHint{
+    font-size:10px;
+  }
+}
+
+@media (max-width: 480px){
+  #hud{
+    transform:scale(0.72);
+  }
+  #dialog{
+    min-height:120px;
+  }
+}
+
 
 </style>
 </head>
@@ -373,6 +511,20 @@ body{
   </div>
 </div>
 
+<!-- CONTROLES ANDROID -->
+<div id="touchControls" aria-hidden="true">
+  <div class="dpad">
+    <button class="dpad-btn up" data-dir="up" type="button" aria-label="Arriba"></button>
+    <button class="dpad-btn left" data-dir="left" type="button" aria-label="Izquierda"></button>
+    <button class="dpad-btn right" data-dir="right" type="button" aria-label="Derecha"></button>
+    <button class="dpad-btn down" data-dir="down" type="button" aria-label="Abajo"></button>
+  </div>
+  <div class="buttons">
+    <button class="action-btn small" id="btnAction" type="button"><span>B</span></button>
+    <button class="action-btn" id="btnJump" type="button"><span>A</span></button>
+  </div>
+</div>
+
 <div id="dialog">
   <div class="dialog-inner">
     <p id="dialogText"></p>
@@ -391,14 +543,23 @@ body{
 </div>
 
 <script>
-const zoom = 3.4; 
+const baseZoom = 3.4;
+let zoom = baseZoom;
 const game = document.getElementById("game");
 const player = document.getElementById("player");
 const world = document.getElementById("world");  // Movido aquí para que esté definido antes de usarse
+const touchControls = document.getElementById("touchControls");
+const btnJump = document.getElementById("btnJump");
+const btnAction = document.getElementById("btnAction");
 
 const fogLayer = document.createElement("div");
 fogLayer.id = "fogLayer";
 game.appendChild(fogLayer);
+
+const isTouchDevice = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
+if(isTouchDevice){
+  document.body.classList.add("touch");
+}
 
 /* DATOS DEL JUGADOR */
 let coins = 0;
@@ -1856,9 +2017,74 @@ entities.push({ el:player, isPlayer:true });
 const keys = {};
 window.addEventListener("keydown",e=>{
   if(gameOver) return;
-  if(talking) return;
-  keys[e.key]=true;
+
+  if(talking && e.key !== "Enter"){
+    return;
+  }
+
+  if(e.key === " "){
+    if(e.repeat) return;
+    handleJumpPress();
+    return;
+  }
+
+  if(e.key === "Enter"){
+    handleActionPress();
+  }
 });
+
+function bindHold(button, onDown, onUp){
+  let activeId = null;
+
+  button.addEventListener("pointerdown", e=>{
+    e.preventDefault();
+    if(activeId !== null) return;
+    activeId = e.pointerId;
+    button.setPointerCapture(e.pointerId);
+    onDown();
+  });
+
+  const end = (e)=>{
+    if(activeId !== e.pointerId) return;
+    onUp();
+    activeId = null;
+    button.releasePointerCapture(e.pointerId);
+  };
+
+  button.addEventListener("pointerup", end);
+  button.addEventListener("pointercancel", end);
+  button.addEventListener("pointerleave", end);
+}
+
+if(isTouchDevice && touchControls){
+  const dpadMap = {
+    up: "ArrowUp",
+    down: "ArrowDown",
+    left: "ArrowLeft",
+    right: "ArrowRight"
+  };
+
+  touchControls.querySelectorAll(".dpad-btn").forEach(btn=>{
+    const dir = btn.dataset.dir;
+    const key = dpadMap[dir];
+    if(!key) return;
+    bindHold(btn,
+      ()=>{
+        if(gameOver || talking) return;
+        keys[key] = true;
+      },
+      ()=>{ keys[key] = false; }
+    );
+  });
+
+  if(btnJump){
+    bindHold(btnJump, ()=>handleJumpPress(), ()=>{});
+  }
+
+  if(btnAction){
+    bindHold(btnAction, ()=>handleActionPress(), ()=>{});
+  }
+}
 window.addEventListener("keyup",e=>keys[e.key]=false);
 
 /* COLISIÓN SOLO CON LA BASE */
@@ -2313,6 +2539,10 @@ createEnemy({x:1032, y:2202, sprite:"Img/enemy1.png"});
 const dialog = document.getElementById("dialog");
 const dialogText = document.getElementById("dialogText");
 const dialogPage = document.getElementById("dialogPage");
+const dialogHint = document.getElementById("dialogHint");
+if(isTouchDevice && dialogHint){
+  dialogHint.textContent = "B";
+}
 let talking = false;
 
 const DIALOG_MAX_CHARS = 140;
@@ -2388,7 +2618,47 @@ function advanceDialog(){
     closeDialog();
   }
 }
+function handleJumpPress(){
+  if(gameOver) return;
+  if(talking) return;
+  if(!jumping){
+    jumping = true;
+    jumpTimer = 0;
+  }
+}
 
+function handleActionPress(){
+  if(gameOver) return;
+
+  if(talking){
+    advanceDialog();
+    return;
+  }
+
+  for(const npc of npcs){
+    const dx = Math.abs(playerPos.x - npc.x);
+    const dy = Math.abs(playerPos.y - npc.y);
+
+    if(dx < 32 && dy < 32){
+      lookAtPlayer(npc);
+      npc.walking = false;
+      if(npc.shop && npc.shop.type === "heart"){
+        const price = npc.shop.price ?? 1;
+        if(health >= maxHealth){
+          openDialog("Pfff...Ya tienes todos los corazones. No necesitas mas, pero si los llegas a necesitar, hablame.");
+        }else if(!spendCoins(price)){
+          openDialog(`Suelo vender corazones a 3 monedas... pero para alguien como tú... serán ${price}. Riesgos del negocio, ya sabes.`);
+        }else{
+          setHealth(health + 1);
+          openDialog(`Bien hecho muchacho... no doy reembolsos.`);
+        }
+      }else{
+        openDialog(npc.text);
+      }
+      break;
+    }
+  }
+}
 window.addEventListener("keydown",e=>{
   if(gameOver) return;
 
@@ -2398,44 +2668,67 @@ window.addEventListener("keydown",e=>{
 
   if(e.key === " "){
     if(e.repeat) return;
-    if(!jumping){
-      jumping = true;
-      jumpTimer = 0;
-    }
+    handleJumpPress();
     return;
   }
 
   if(e.key === "Enter"){
-    if(talking){
-      advanceDialog();
-      return;
-    }
-
-    for(const npc of npcs){
-      const dx = Math.abs(playerPos.x - npc.x);
-      const dy = Math.abs(playerPos.y - npc.y);
-
-      if(dx < 32 && dy < 32){
-        lookAtPlayer(npc);
-        npc.walking = false;
-        if(npc.shop && npc.shop.type === "heart"){
-          const price = npc.shop.price ?? 1;
-          if(health >= maxHealth){
-            openDialog("Pfff...Ya tienes todos los corazones. No necesitas mas, pero si los llegas a necesitar, hablame.");
-          }else if(!spendCoins(price)){
-            openDialog(`Suelo vender corazones a 3 monedas... pero para alguien como tú... serán ${price}. Riesgos del negocio, ya sabes.`);
-          }else{
-            setHealth(health + 1);
-            openDialog(`Bien hecho muchacho... no doy reembolsos.`);
-          }
-        }else{
-          openDialog(npc.text);
-        }
-        break;
-      }
-    }
+    handleActionPress();
   }
 });
+
+function bindHold(button, onDown, onUp){
+  let activeId = null;
+
+  button.addEventListener("pointerdown", e=>{
+    e.preventDefault();
+    if(activeId !== null) return;
+    activeId = e.pointerId;
+    button.setPointerCapture(e.pointerId);
+    onDown();
+  });
+
+  const end = (e)=>{
+    if(activeId !== e.pointerId) return;
+    onUp();
+    activeId = null;
+    button.releasePointerCapture(e.pointerId);
+  };
+
+  button.addEventListener("pointerup", end);
+  button.addEventListener("pointercancel", end);
+  button.addEventListener("pointerleave", end);
+}
+
+if(isTouchDevice && touchControls){
+  const dpadMap = {
+    up: "ArrowUp",
+    down: "ArrowDown",
+    left: "ArrowLeft",
+    right: "ArrowRight"
+  };
+
+  touchControls.querySelectorAll(".dpad-btn").forEach(btn=>{
+    const dir = btn.dataset.dir;
+    const key = dpadMap[dir];
+    if(!key) return;
+    bindHold(btn,
+      ()=>{
+        if(gameOver || talking) return;
+        keys[key] = true;
+      },
+      ()=>{ keys[key] = false; }
+    );
+  });
+
+  if(btnJump){
+    bindHold(btnJump, ()=>handleJumpPress(), ()=>{});
+  }
+
+  if(btnAction){
+    bindHold(btnAction, ()=>handleActionPress(), ()=>{});
+  }
+}
 
 function hurtPlayer(enemy){
   if(playerHitCooldown > 0 || health <= 0) return;
@@ -2862,10 +3155,28 @@ const camera = {
   y: 0
 };
 
-const screen = {
+let screen = {
   w: game.clientWidth,
   h: game.clientHeight
 };
+
+function computeZoom(){
+  const minSide = Math.min(window.innerWidth, window.innerHeight);
+  if(minSide <= 420) return 2.1;
+  if(minSide <= 560) return 2.4;
+  if(minSide <= 720) return 2.8;
+  return baseZoom;
+}
+
+function updateScreenSize(){
+  screen.w = game.clientWidth || window.innerWidth;
+  screen.h = game.clientHeight || window.innerHeight;
+  zoom = computeZoom();
+}
+
+window.addEventListener("resize", updateScreenSize);
+window.addEventListener("orientationchange", updateScreenSize);
+updateScreenSize();
 
 function addCoins(amount){
   coins += amount;
@@ -2891,10 +3202,3 @@ updateHUD();
 
 </body>
 </html>
-
-
-
-
-
-
-
