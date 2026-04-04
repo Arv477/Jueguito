@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Editor 2D con Tileset</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+
+body {
+  margin: 0;
+  display: flex;
+  height: 100vh;
+  background: linear-gradient(135deg, #1e1e1e, #2a2a2a);
+  color: #e0e0e0;
+  font-family: 'Roboto', sans-serif;
+  overflow: hidden;
+}
+
+/* ===== CONTENEDOR DEL MAPA ===== */
+#viewport {
+  flex: 1;
+  overflow: auto;
+  background: #000;
+  border-right: 1px solid #444;
+}
+
+/* ===== CANVAS ===== */
+canvas {
+  image-rendering: pixelated;
+  background: #000;
+  cursor: crosshair;
+  border: 1px solid #333;
+}
+
+/* ===== MENU FIJO ===== */
+#ui {
+  width: 280px;
+  padding: 20px;
+  background: #2c2c2c;
+  border-left: 2px solid #555;
+  position: sticky;
+  right: 0;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  box-shadow: -2px 0 10px rgba(0,0,0,0.5);
+}
+
+#ui h3 {
+  margin: 20px 0 10px 0;
+  color: #ffffff;
+  font-weight: 500;
+  border-bottom: 1px solid #555;
+  padding-bottom: 5px;
+}
+
+#ui section {
+  margin-bottom: 25px;
+}
+
+/* ===== UI ===== */
+#palette {
+  position: relative;
+  image-rendering: pixelated;
+  cursor: pointer;
+  background: #000;
+  overflow: auto;
+  border: 1px solid #555;
+  border-radius: 5px;
+  max-height: 200px;
+}
+
+#tilesetView {
+  image-rendering: pixelated;
+  display: block;
+  border-radius: 5px;
+}
+
+#selector {
+  position: absolute;
+  border: 3px solid #ff6b6b;
+  pointer-events: none;
+  box-sizing: border-box;
+  border-radius: 3px;
+  box-shadow: 0 0 5px rgba(255, 107, 107, 0.5);
+}
+
+input, select, button {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #555;
+  border-radius: 5px;
+  background: #3a3a3a;
+  color: #e0e0e0;
+  font-family: 'Roboto', sans-serif;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+input:focus, select:focus, button:focus {
+  outline: none;
+  border-color: #ff6b6b;
+  box-shadow: 0 0 5px rgba(255, 107, 107, 0.5);
+}
+
+button {
+  background: #4a4a4a;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+button:hover {
+  background: #5a5a5a;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+textarea {
+  width: 100%;
+  height: 160px;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #555;
+  border-radius: 5px;
+  background: #3a3a3a;
+  color: #e0e0e0;
+  font-family: 'Roboto', sans-serif;
+  font-size: 12px;
+  resize: vertical;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: #ff6b6b;
+  box-shadow: 0 0 5px rgba(255, 107, 107, 0.5);
+}
+
+/* Iconos en botones */
+button i {
+  margin-right: 8px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="viewport">
+  <canvas id="map"></canvas>
+</div>
+
+<div id="ui">
+  <section>
+    <h3><i class="fas fa-expand"></i> Tamaño del nivel</h3>
+    <input id="w" type="number" value="67" min="5">
+    <input id="h" type="number" value="39" min="5">
+    <button id="resize"><i class="fas fa-sync-alt"></i> Crear / Redimensionar</button>
+  </section>
+
+  <section>
+    <h3><i class="fas fa-layer-group"></i> Capa activa</h3>
+    <select id="layerSelect"></select>
+  </section>
+
+  <button id="fillLevel">
+    <i class="fas fa-fill-drip"></i> Llenar nivel con este tile
+  </button>
+  </section>
+
+  <section>
+    <h3><i class="fas fa-th"></i> Tileset</h3>
+    <div id="palette">
+      <img id="tilesetView">
+      <div id="selector"></div>
+    </div>
+  </section>
+
+  <section>
+    <h3><i class="fas fa-image"></i> Background</h3>
+    <input type="file" id="backgroundInput" accept="image/*">
+  </section>
+
+  <section>
+    <button id="exportImage"><i class="fas fa-download"></i> Descargar nivel como imagen</button>
+    <button id="play"><i class="fas fa-play"></i> Jugar Nivel</button>
+    <button id="export"><i class="fas fa-file-export"></i> Exportar nivel</button>
+    <textarea id="output" placeholder="Datos del nivel en JSON..."></textarea>
+  </section>
+</div>
+
+<script>
+
+const TILE = 16;
+const canvas = document.getElementById("map");
+const ctx = canvas.getContext("2d");
+const viewport = document.getElementById("viewport");
+const palette = document.getElementById("palette");
+
+let COLS = 67;
+let ROWS = 39;
+const LAYERS = [
+  { name: "Fondo", solid: false },
+  { name: "Colisiones", solid: true },
+  { name: "Decoración", solid: false }
+];
+
+let currentLayer = 0;
+let level = [];
+
+let selectedTile = 0;
+let selection = {
+  x: 0,
+  y: 0,
+  w: 1,
+  h: 1,
+  tiles: [[0]]
+};
+
+let selecting = false;
+let startSelX = 0;
+let startSelY = 0;
+
+let backgroundImage = null;
+let gameMode = false;
+let playerX = 0;
+let playerY = 0;
+let playerVX = 0;
+let playerVY = 0;
+let playerTile = 0; // Tile para el jugador (puedes cambiarlo al índice del tile de personaje en tu tileset)
+let onGround = false;
+
+const GRAVITY = 0.5;
+const JUMP_FORCE = -10;
+const MOVE_SPEED = 2;
+
+let mouseX = -1;
+let mouseY = -1;
+let painting = false;
+
+// ===== TILESET =====
+const tileset = new Image();
+tileset.src = "tileset.png";
+let tilesPerRow = 0;
+
+// ===== Layers =====
+  const layerSelect = document.getElementById("layerSelect");
+
+LAYERS.forEach((layer, i) => {
+  const opt = document.createElement("option");
+  opt.value = i;
+  opt.textContent = layer.name;
+  layerSelect.appendChild(opt);
+});
+
+layerSelect.onchange = e => {
+  currentLayer = +e.target.value;
+};
+
+// ===== BACKGROUND =====
+document.getElementById("backgroundInput").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      backgroundImage = new Image();
+      backgroundImage.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+});
+
+// ===== CREAR MAPA =====
+function createMap(){
+  canvas.width = COLS * TILE;
+  canvas.height = ROWS * TILE;
+
+  level = LAYERS.map(() =>
+    Array.from({ length: ROWS }, () =>
+      Array.from({ length: COLS }, () => -1)
+    )
+  );
+}
+createMap();
+
+const tilesetView = document.getElementById("tilesetView");
+const selector = document.getElementById("selector");
+
+tileset.onload = () => {
+  tilesetView.src = tileset.src;
+
+  tilesPerRow = tileset.width / TILE;
+
+  tilesetView.width = tileset.width;
+  tilesetView.height = tileset.height;
+
+  selector.style.width = TILE + "px";
+  selector.style.height = TILE + "px";
+};
+
+palette.addEventListener("mousedown", e => {
+  const rect = tilesetView.getBoundingClientRect();
+  selecting = true;
+
+  startSelX = Math.floor((e.clientX - rect.left) / TILE);
+  startSelY = Math.floor((e.clientY - rect.top) / TILE);
+});
+
+palette.addEventListener("mousemove", e => {
+  if (!selecting) return;
+
+  const rect = tilesetView.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / TILE);
+  const y = Math.floor((e.clientY - rect.top) / TILE);
+
+  selection.x = Math.min(startSelX, x);
+  selection.y = Math.min(startSelY, y);
+  selection.w = Math.abs(x - startSelX) + 1;
+  selection.h = Math.abs(y - startSelY) + 1;
+
+  selector.style.left = selection.x * TILE + "px";
+  selector.style.top  = selection.y * TILE + "px";
+  selector.style.width  = selection.w * TILE + "px";
+  selector.style.height = selection.h * TILE + "px";
+});
+
+palette.addEventListener("mouseup", () => {
+  selecting = false;
+
+  // Guardar tiles seleccionados
+  selection.tiles = [];
+  for (let y = 0; y < selection.h; y++) {
+    selection.tiles[y] = [];
+    for (let x = 0; x < selection.w; x++) {
+      selection.tiles[y][x] =
+        (selection.y + y) * tilesPerRow + (selection.x + x);
+    }
+  }
+
+  selectedTile = selection.tiles[0][0];
+  playerTile = selectedTile;
+});
+
+
+// ===== INPUT =====
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+
+canvas.addEventListener("mousedown", () => painting = true);
+canvas.addEventListener("mouseup", () => painting = false);
+canvas.addEventListener("mouseleave", () => painting = false);
+
+canvas.addEventListener("mousemove", e => {
+  const r = canvas.getBoundingClientRect();
+  mouseX = Math.floor((e.clientX - r.left) / TILE);
+  mouseY = Math.floor((e.clientY - r.top) / TILE);
+
+  if(painting && mouseX>=0 && mouseY>=0 && mouseX<COLS && mouseY<ROWS && !gameMode){
+    if (e.buttons === 1) {
+  for (let y = 0; y < selection.h; y++) {
+    for (let x = 0; x < selection.w; x++) {
+      const mapX = mouseX + x;
+      const mapY = mouseY + y;
+
+      if (mapX >= 0 && mapY >= 0 && mapX < COLS && mapY < ROWS) {
+        level[currentLayer][mapY][mapX] = selection.tiles[y][x];
+
+      }
+    }
+  }
+}
+
+    if(e.buttons === 2) level[currentLayer][mouseY][mouseX] = -1;
+  }
+});
+
+// ===== TECLAS PARA JUEGO =====
+let keys = {};
+document.addEventListener("keydown", e => {
+  keys[e.key] = true;
+  if (!gameMode) return;
+  if (e.key === "Escape") {
+    gameMode = false;
+    canvas.style.cursor = "crosshair";
+    playerVX = 0;
+    playerVY = 0;
+  }
+});
+document.addEventListener("keyup", e => {
+  keys[e.key] = false;
+});
+
+// ===== FUNCIONES DE COLISIÓN =====
+function isSolid(x, y) {
+  if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return true;
+  return level.some((layer, i) =>
+    LAYERS[i].solid && layer[y][x] >= 0
+  );
+}
+
+
+function movePlayer() {
+  if (!gameMode) return;
+
+  // Movimiento horizontal
+  let newX = playerX;
+  if (keys["a"] || keys["A"]) playerVX = -MOVE_SPEED;
+  else if (keys["d"] || keys["D"]) playerVX = MOVE_SPEED;
+  else playerVX *= 0.8; // Fricción
+
+  newX += playerVX;
+  if (!isSolid(Math.floor(newX), Math.floor(playerY)) && !isSolid(Math.floor(newX), Math.floor(playerY + 0.99))) {
+    playerX = newX;
+  } else {
+    playerVX = 0;
+  }
+
+  // Salto
+  if ((keys["w"] || keys["W"]) && onGround) {
+    playerVY = JUMP_FORCE;
+    onGround = false;
+  }
+
+  // Gravedad y movimiento vertical
+  playerVY += GRAVITY;
+  let newY = playerY + playerVY;
+
+  if (playerVY > 0) { // Cayendo
+    if (!isSolid(Math.floor(playerX), Math.floor(newY + 1)) && !isSolid(Math.floor(playerX + 0.99), Math.floor(newY + 1))) {
+      playerY = newY;
+      onGround = false;
+    } else {
+      playerY = Math.floor(newY);
+      playerVY = 0;
+      onGround = true;
+    }
+  } else { // Saltando
+    if (!isSolid(Math.floor(playerX), Math.floor(newY)) && !isSolid(Math.floor(playerX + 0.99), Math.floor(newY))) {
+      playerY = newY;
+    } else {
+      playerVY = 0;
+    }
+  }
+
+  // Mantener dentro del mapa
+  playerX = Math.max(0, Math.min(COLS - 1, playerX));
+  playerY = Math.max(0, Math.min(ROWS - 1, playerY));
+}
+
+// ===== DRAW =====
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Dibujar background si existe
+  if (backgroundImage) {
+    ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+  }
+
+  // Dibujar tiles
+for (let l = 0; l < level.length; l++) {
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const id = level[l][y][x];
+      if (id >= 0) {
+        ctx.drawImage(
+          tileset,
+          (id % tilesPerRow) * TILE,
+          Math.floor(id / tilesPerRow) * TILE,
+          TILE, TILE,
+          x * TILE, y * TILE, TILE, TILE
+        );
+      }
+    }
+  }
+}
+
+
+  if (gameMode) {
+    // Dibujar jugador
+    ctx.drawImage(
+      tileset,
+      (playerTile % tilesPerRow) * TILE,
+      Math.floor(playerTile / tilesPerRow) * TILE,
+      TILE, TILE,
+      playerX * TILE, playerY * TILE, TILE, TILE
+    );
+
+    // Centrar vista en el jugador
+    const centerX = playerX * TILE - viewport.clientWidth / 2 + TILE / 2;
+    const centerY = playerY * TILE - viewport.clientHeight / 2 + TILE / 2;
+    viewport.scrollTo(centerX, centerY);
+  } else {
+    // Preview en modo editor
+    if(mouseX>=0 && mouseY>=0 && mouseX<COLS && mouseY<ROWS){
+      ctx.globalAlpha = 0.6;
+      ctx.drawImage(
+        tileset,
+        (selectedTile % tilesPerRow) * TILE,
+        Math.floor(selectedTile / tilesPerRow) * TILE,
+        TILE, TILE,
+        mouseX*TILE, mouseY*TILE, TILE, TILE
+      );
+      ctx.globalAlpha = 1;
+    }
+
+    // Grid en modo editor
+    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    for(let x=0;x<=COLS;x++){
+      ctx.beginPath();
+      ctx.moveTo(x*TILE,0);
+      ctx.lineTo(x*TILE,canvas.height);
+      ctx.stroke();
+    }
+    for(let y=0;y<=ROWS;y++){
+      ctx.beginPath();
+      ctx.moveTo(0,y*TILE);
+      ctx.lineTo(canvas.width,y*TILE);
+      ctx.stroke();
+    }
+  }
+
+  requestAnimationFrame(draw);
+}
+draw();
+
+// ===== UPDATE LOOP =====
+function update() {
+  movePlayer();
+  setTimeout(update, 1000 / 60); // 60 FPS
+}
+update();
+
+// ===== RESIZE =====
+document.getElementById("resize").onclick = () => {
+  COLS = +document.getElementById("w").value;
+  ROWS = +document.getElementById("h").value;
+  createMap();
+  playerX = Math.min(playerX, COLS - 1);
+  playerY = Math.min(playerY, ROWS - 1);
+};
+
+// ===== PLAY =====
+document.getElementById("play").onclick = () => {
+  gameMode = true;
+  canvas.style.cursor = "default";
+  playerX = 0;
+  playerY = 0;
+  playerVX = 0;
+  playerVY = 0;
+  onGround = false;
+};
+
+// ===== EXPORT =====
+document.getElementById("output").value =
+  JSON.stringify({
+    cols: COLS,
+    rows: ROWS,
+    layers: level
+  }, null, 2);
+
+ document.getElementById("exportImage").onclick = () => {
+  if (!tileset.complete || tilesPerRow === 0) {
+    alert("⏳ El tileset aún no ha cargado");
+    return;
+  }
+
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = COLS * TILE;
+  exportCanvas.height = ROWS * TILE;
+  const ectx = exportCanvas.getContext("2d");
+
+  // Background
+  if (backgroundImage) {
+    ectx.drawImage(backgroundImage, 0, 0, exportCanvas.width, exportCanvas.height);
+  }
+
+  // Capas
+  for (let l = 0; l < level.length; l++) {
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const id = level[l][y][x];
+        if (id >= 0) {
+          ectx.drawImage(
+            tileset,
+            (id % tilesPerRow) * TILE,
+            Math.floor(id / tilesPerRow) * TILE,
+            TILE, TILE,
+            x * TILE, y * TILE, TILE, TILE
+          );
+        }
+      }
+    }
+  }
+
+  const link = document.createElement("a");
+  link.download = "nivel.png";
+  link.href = exportCanvas.toDataURL("image/png");
+  link.click();
+  console.log("Exportando imagen...");
+};
+
+document.getElementById("fillLevel").onclick = () => {
+  if (!selection || !selection.tiles) return;
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+
+      // Soporta selecciones grandes (patrones)
+      const tileX = x % selection.w;
+      const tileY = y % selection.h;
+
+      level[currentLayer][y][x] = selection.tiles[tileY][tileX];
+    }
+  }
+};
+
+</script>
+
+</body>
+</html>

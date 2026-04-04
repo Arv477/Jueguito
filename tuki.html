@@ -1,0 +1,2900 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Pueblo</title>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+:root{
+  --pixel-font: "Press Start 2P", monospace;
+}
+
+body{
+  background:#1b1b1b;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+  margin:0;
+  font-family:var(--pixel-font);
+  -webkit-font-smoothing:none;
+  text-rendering:optimizeSpeed;
+}
+
+*{
+  font-family:var(--pixel-font);
+}
+
+#game{
+  position:relative;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#000;
+}
+
+#world{
+  position:absolute;
+  width:2880px;
+  height:2880px;
+  background-image: url("mapa.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  image-rendering:pixelated;
+}
+
+#fogLayer{
+  position:fixed;
+  left:0;
+  top:0;
+  width:100%;
+  height:100%;
+  pointer-events:none;
+  opacity:0;
+  transition:opacity 1.2s ease;
+  z-index:9000;
+}
+
+#fogLayer.active{
+  opacity:1;
+}
+
+.fog{
+  position:absolute;
+  width:120vw;
+  height:120vh;
+  background-image:url("Img/Neblina.png");
+  background-size:cover;
+  background-repeat:no-repeat;
+  image-rendering:pixelated;
+  opacity:0.7;
+  animation-name:fogDrift;
+  animation-iteration-count:infinite;
+  animation-direction:normal;
+  animation-timing-function:linear;
+}
+
+@keyframes fogDrift{
+  from{ transform:translate(-50%, -50%) translateX(60vw) scale(var(--fog-scale, 0)); }
+  to{ transform:translate(-50%, -50%) translateX(-200vw) scale(var(--fog-scale, 0)); }
+}
+
+
+
+/* ENTIDADES */
+.entity{
+  position:absolute;
+  transform:translate(-50%, -100%);
+  image-rendering:pixelated;
+}
+
+#player{
+  width:32px;
+  height:32px;
+  overflow:hidden;
+  image-rendering:pixelated;
+}
+
+#playerSprite{
+  width:128px; /* 4 frames */
+  height:128px; /* 4 direcciones */
+  background:url("Personaje.png") no-repeat;
+  image-rendering:pixelated;
+}
+
+#playerSprite.hurt{
+  filter:brightness(0.8) sepia(1) hue-rotate(-35deg) saturate(8) drop-shadow(0 0 4px #ff2d2d);
+}
+
+
+/* OBJETOS */
+.object img{
+  display:block;
+  pointer-events:none;
+}
+
+/* BLOQUES DE PAGO */
+
+/* hitbox solo para colisión (opcional debug) */
+.hitbox{
+  position:absolute;
+  left:50%;
+  bottom:0;
+  transform:translateX(-50%);
+  background:rgba(0, 255, 0, 0);
+}
+
+
+/* HUD */
+#hud{
+  position:fixed;
+  top:18px;
+  left:0px;
+  z-index:9999;
+  font-family:var(--pixel-font);
+  color:#42383a;
+  image-rendering:pixelated;
+}
+
+.hud-box{
+  display:flex;
+  align-items:center;
+  gap:20px;
+  padding:10px 32px;
+  background-image:url(HUD.png);
+  background-size:contain;
+  background-repeat:no-repeat;
+}
+
+.hud-box img{
+  width:34px;
+  height:37px;
+  image-rendering: pixelated;
+}
+
+#coinCount{
+  font-size:20px;
+  line-height:0;
+}
+
+.health-box{
+  gap:22px;
+  image-rendering:pixelated;
+}
+
+.health-hearts{
+  display:flex;
+  gap:8px;
+  image-rendering:pixelated;
+}
+
+.heart{
+  width:52px;
+  height:52px;
+  background-image:url("Img/corazon.png");
+  background-size:contain;
+  background-repeat:no-repeat;
+  image-rendering: pixelated;
+  filter:grayscale(100%);
+}
+
+.heart.filled{
+  opacity:1;
+  filter:none;
+}
+
+/* MONEDAS */
+.coin{
+  position:absolute;
+  width:16px;
+  height:16px;
+  transform:translate(-50%, -100%);
+  image-rendering: pixelated;
+  overflow:hidden;
+}
+
+.coinSprite{
+  width:96px; /* 6 frames */
+  height:16px;
+  background:url("Img/coin.png") no-repeat;
+}
+
+/* ARBUSTOS */
+.bush{
+  position:absolute;
+  width:16px;
+  height:16px;
+  transform:translate(-50%, -100%);
+  image-rendering: pixelated;
+  overflow:hidden;
+}
+
+.bushSprite{
+  width:64px; /* 4 frames */
+  height:16px;
+  background:url("Img/Arbusto.png") no-repeat;
+}
+
+/* OBJETOS ANIMADOS */
+.spriteObject{
+  overflow:hidden;
+}
+
+.spriteObjectSprite{
+  image-rendering:pixelated;
+  background-repeat:no-repeat;
+}
+
+/* NPC */
+.npc{
+  width:32px;
+  height:32px;
+  overflow:hidden;
+}
+
+.npcSprite{
+  width:128px;
+  height:128px;
+  image-rendering: pixelated;
+}
+
+/* ENEMIGO */
+.enemy{
+  width:32px;
+  height:32px;
+  overflow:hidden;
+}
+
+.enemySprite{
+  width:128px;
+  height:128px;
+  image-rendering: pixelated;
+}
+/* DIALOGO */
+#dialog{
+  position:fixed;
+  bottom:18px;
+  left:50%;
+  transform:translateX(-50%);
+  width:min(920px, 92vw);
+  min-height:140px;
+  padding:0;
+  background:linear-gradient(180deg, rgba(255,248,230,0.98), rgba(245,228,200,0.98));
+  border:4px solid #3a2b2e;
+  box-shadow:0 10px 0 #1b1416, 0 24px 40px rgba(0,0,0,0.45);
+  image-rendering: pixelated;
+  font-family: var(--pixel-font);
+  display:none;
+  z-index:99999;
+}
+
+.dialog-inner{
+  padding:18px 20px 14px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+#dialogText{
+  font-size:16px;
+  line-height:1.6;
+  margin:0;
+  color:#2f2527;
+  text-shadow:1px 1px 0 rgba(255,255,255,0.5);
+  white-space:pre-wrap;
+}
+
+.dialog-meta{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  font-size:12px;
+  color:#4a3a3d;
+  opacity:0.9;
+}
+
+#dialogHint{
+  padding:4px 8px;
+  border:2px solid #3a2b2e;
+  background:#f4dfbe;
+  color:#2f2527;
+}
+
+#gameOverScreen{
+  position:fixed;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:rgba(0, 0, 0, 0.82);
+  z-index:100000;
+}
+
+.game-over-box{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:20px;
+  padding:28px 36px;
+  border:4px solid #ffffff;
+  background:#1b1b1b;
+  color:#ffffff;
+  text-align:center;
+}
+
+.game-over-box h2{
+  margin:0;
+  font-size:20px;
+}
+
+#restartButton{
+  font-family:var(--pixel-font);
+  font-size:14px;
+  border:3px solid #ffffff;
+  background:#2b2b2b;
+  color:#ffffff;
+  padding:12px 18px;
+  cursor:pointer;
+}
+
+#restartButton:hover{
+  background:#3a3a3a;
+}
+
+
+</style>
+</head>
+<body>
+
+<div id="game">
+  <div id="world">
+    <div id="player" class="entity">
+      <div id="playerSprite"></div>
+    </div>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-box health-box">
+    <div id="healthHearts" class="health-hearts">
+      <span class="heart"></span>
+      <span class="heart"></span>
+      <span class="heart"></span>
+    </div>
+  </div>
+<br>
+    <div class="hud-box">
+    <img src="Img/coinHUD.png" alt="Moneda">
+    <span id="coinCount">0</span>
+  </div>
+</div>
+
+<div id="dialog">
+  <div class="dialog-inner">
+    <p id="dialogText"></p>
+    <div class="dialog-meta">
+      <span id="dialogPage"></span>
+      <span id="dialogHint">ENTER</span>
+    </div>
+  </div>
+</div>
+
+<div id="gameOverScreen">
+  <div class="game-over-box">
+    <h2>¿Te moriste? XD</h2>
+    <button id="restartButton" type="button">Si...</button>
+  </div>
+</div>
+
+<script>
+const zoom = 3.4; 
+const game = document.getElementById("game");
+const player = document.getElementById("player");
+const world = document.getElementById("world");  // Movido aquí para que esté definido antes de usarse
+
+const fogLayer = document.createElement("div");
+fogLayer.id = "fogLayer";
+game.appendChild(fogLayer);
+
+/* DATOS DEL JUGADOR */
+let coins = 0;
+let maxHealth = 3;
+let health = 3;
+
+const coinCountEl = document.getElementById("coinCount");
+const healthHeartsEl = document.getElementById("healthHearts");
+const heartEls = Array.from(healthHeartsEl.querySelectorAll(".heart"));
+const gameOverScreen = document.getElementById("gameOverScreen");
+const restartButton = document.getElementById("restartButton");
+
+let gameOver = false;
+
+function showGameOver(){
+  if(gameOver) return;
+  gameOver = true;
+  talking = false;
+  dialog.style.display = "none";
+  Object.keys(keys).forEach(key=>{
+    keys[key] = false;
+  });
+  gameOverScreen.style.display = "flex";
+}
+
+
+function updateHUD(){
+  coinCountEl.textContent = coins;
+
+  heartEls.forEach((heart, idx)=>{
+    if(idx < health){
+      heart.classList.add("filled");
+    }else{
+      heart.classList.remove("filled");
+    }
+  });
+}
+/*x:2823, y:200  */
+let playerPos = {x:2823, y:200};
+const speed = 1;
+
+const NPC_HITBOX = {
+  w: 30,
+  h: 30
+};
+const ENEMY_HITBOX = {
+  w: 26,
+  h: 26
+};
+
+/* OBJETOS CON SPRITE + HITBOX */
+const objects = [
+  {x:41, y:742, sprite:"", sw:0, sh:0, hw:82, hh:742},
+  {x:55, y:780, sprite:"", sw:0, sh:0, hw:48, hh:35},
+  {x:87, y:804, sprite:"", sw:0, sh:0, hw:47, hh:45},
+  {x:32, y:837, sprite:"", sw:0, sh:0, hw:55, hh:56},
+  {x:772, y:50, sprite:"", sw:0, sh:0, hw:1379, hh:50},
+  {x:1367, y:437, sprite:"", sw:0, sh:0, hw:13, hh:385},
+  {x:1454, y:160, sprite:"", sw:0, sh:0, hw:15, hh:108},
+  {x:1411, y:105, sprite:"", sw:0, sh:0, hw:36, hh:52},
+  {x:1491, y:165, sprite:"", sw:0, sh:0, hw:48, hh:14},
+  {x:1512, y:254, sprite:"", sw:0, sh:0, hw:14, hh:87},
+  {x:1547, y:254, sprite:"", sw:0, sh:0, hw:55, hh:18},
+  {x:1567, y:452, sprite:"", sw:0, sh:0, hw:13, hh:197},
+  {x:1713, y:391, sprite:"", sw:0, sh:0, hw:58, hh:391},
+  {x:1799, y:390, sprite:"", sw:0, sh:0, hw:115, hh:60},
+  {x:1946, y:455, sprite:"", sw:0, sh:0, hw:15, hh:455},
+  {x:1723, y:455, sprite:"", sw:0, sh:0, hw:295, hh:17},
+  {x:1927, y:487, sprite:"", sw:0, sh:0, hw:8, hh:54},
+  {x:1877, y:489, sprite:"", sw:0, sh:0, hw:8, hh:56},
+  {x:2090, y:567, sprite:"", sw:0, sh:0, hw:17, hh:185},
+  {x:1785, y:570, sprite:"", sw:0, sh:0, hw:609, hh:15},
+  {x:1166, y:371, sprite:"", sw:0, sh:0, hw:350, hh:26},
+  {x:1980, y:141, sprite:"", sw:0, sh:0, hw:50, hh:28},
+  {x:2018, y:168, sprite:"", sw:0, sh:0, hw:43, hh:28},
+  {x:2071, y:166, sprite:"", sw:0, sh:0, hw:47, hh:27},
+  {x:2107, y:196, sprite:"", sw:0, sh:0, hw:59, hh:35},
+  {x:2262, y:327, sprite:"", sw:0, sh:0, hw:198, hh:108},
+  {x:2415, y:162, sprite:"", sw:0, sh:0, hw:269, hh:136},
+  {x:2227, y:164, sprite:"", sw:0, sh:0, hw:65, hh:71},
+  {x:2269, y:105, sprite:"", sw:0, sh:0, hw:25, hh:105},
+  {x:2164, y:170, sprite:"", sw:0, sh:0, hw:56, hh:20},
+  {x:2148, y:398, sprite:"", sw:0, sh:0, hw:18, hh:227},
+  {x:2119, y:398, sprite:"", sw:0, sh:0, hw:36, hh:16},
+  {x:1786, y:602, sprite:"", sw:0, sh:0, hw:149, hh:27},
+  {x:1343, y:444, sprite:"", sw:0, sh:0, hw:58, hh:8},
+  {x:1308, y:494, sprite:"", sw:0, sh:0, hw:16, hh:52},
+  {x:1286, y:502, sprite:"", sw:0, sh:0, hw:59, hh:8},
+  {x:1250, y:555, sprite:"", sw:0, sh:0, hw:16, hh:58},
+  {x:1156, y:560, sprite:"", sw:0, sh:0, hw:200, hh:8},
+  {x:1049, y:801, sprite:"", sw:0, sh:0, hw:17, hh:243},
+  {x:1177, y:802, sprite:"", sw:0, sh:0, hw:238, hh:19},
+  {x:1371, y:799, sprite:"", sw:0, sh:0, hw:16, hh:157},
+  {x:1358, y:802, sprite:"", sw:0, sh:0, hw:10, hh:22},
+  {x:1301, y:833, sprite:"", sw:0, sh:0, hw:8, hh:50},
+  {x:1350, y:834, sprite:"", sw:0, sh:0, hw:8, hh:53},
+  {x:1541, y:778, sprite:"", sw:0, sh:0, hw:237, hh:29},
+  {x:1455, y:600, sprite:"", sw:0, sh:0, hw:73, hh:18},
+  {x:1485, y:581, sprite:"", sw:0, sh:0, hw:12, hh:8},
+  {x:1428, y:658, sprite:"", sw:0, sh:0, hw:16, hh:55},
+  {x:1399, y:658, sprite:"", sw:0, sh:0, hw:38, hh:15},
+  {x:27, y:1038, sprite:"", sw:0, sh:0, hw:53, hh:192},
+  {x:173, y:882, sprite:"", sw:0, sh:0, hw:48, hh:36},
+  {x:231, y:947, sprite:"Img/Arbustazo.png", sw:39, sh:36, hw:25, hh:19},
+  {x:84, y:2051, sprite:"", sw:0, sh:0, hw:168, hh:1010},
+  {x:288, y:1003, sprite:"Img/Arbustazo.png", sw:39, sh:36, hw:25, hh:10},
+  {x:388, y:81, sprite:"", sw:0, sh:0, hw:133, hh:30},
+  {x:605, y:427, sprite:"", sw:0, sh:0, hw:161, hh:74},
+  {x:1314, y:281, sprite:"", sw:0, sh:0, hw:65, hh:64},
+  {x:308, y:1805, sprite:"", sw:0, sh:0, hw:275, hh:89},
+  {x:540, y:1803, sprite:"", sw:0, sh:0, hw:189, hh:54},
+  {x:2518, y:278, sprite:"", sw:0, sh:0, hw:59, hh:278},
+  {x:2491, y:304, sprite:"", sw:0, sh:0, hw:56, hh:29},
+  {x:2464, y:335, sprite:"", sw:0, sh:0, hw:64, hh:31},
+  {x:2435, y:393, sprite:"", sw:0, sh:0, hw:60, hh:62},
+  {x:2405, y:452, sprite:"", sw:0, sh:0, hw:64, hh:65},
+  {x:2377, y:511, sprite:"", sw:0, sh:0, hw:68, hh:65},
+  {x:2348, y:567, sprite:"", sw:0, sh:0, hw:62, hh:62},
+  {x:2320, y:683, sprite:"", sw:0, sh:0, hw:66, hh:122},
+  {x:2291, y:778, sprite:"", sw:0, sh:0, hw:67, hh:102},
+  {x:2289, y:1028, sprite:"", sw:0, sh:0, hw:67, hh:168},
+  {x:2262, y:1059, sprite:"", sw:0, sh:0, hw:68, hh:66},
+  {x:2234, y:1115, sprite:"", sw:0, sh:0, hw:67, hh:65},
+  {x:2204, y:1173, sprite:"", sw:0, sh:0, hw:68, hh:93},
+  {x:2175, y:1233, sprite:"", sw:0, sh:0, hw:65, hh:67},
+  {x:2148, y:1262, sprite:"", sw:0, sh:0, hw:65, hh:41},
+  {x:2128, y:1284, sprite:"", sw:0, sh:0, hw:30, hh:29},
+  {x:2003, y:1314, sprite:"", sw:0, sh:0, hw:236, hh:57},
+  {x:1891, y:1259, sprite:"", sw:0, sh:0, hw:116, hh:116},
+  {x:1872, y:1285, sprite:"", sw:0, sh:0, hw:34, hh:33},
+  {x:1818, y:1229, sprite:"", sw:0, sh:0, hw:35, hh:86},
+  {x:1786, y:1201, sprite:"", sw:0, sh:0, hw:32, hh:58},
+  {x:1408, y:1174, sprite:"", sw:0, sh:0, hw:728, hh:62},
+  {x:1543, y:945, sprite:"", sw:0, sh:0, hw:181, hh:69},
+  {x:1428, y:972, sprite:"", sw:0, sh:0, hw:66, hh:65},
+  {x:1195, y:1030, sprite:"", sw:0, sh:0, hw:411, hh:68},
+  {x:1382, y:999, sprite:"", sw:0, sh:0, hw:92, hh:63},
+  {x:1023, y:1171, sprite:"", sw:0, sh:0, hw:61, hh:147},
+  {x:1207, y:1401, sprite:"", sw:0, sh:0, hw:47, hh:72},
+  {x:2102, y:776, sprite:"", sw:0, sh:0, hw:265, hh:28},
+  {x:2480, y:775, sprite:"Img/Rocas.png", sw:50, sh:45, hw:40, hh:30},
+  {x:1988, y:804, sprite:"", sw:0, sh:0, hw:38, hh:21},
+  {x:2218, y:920, sprite:"Img/Rocas.png", sw:50, sh:45, hw:40, hh:30},
+  {x:2665, y:1317, sprite:"", sw:0, sh:0, hw:68, hh:67},
+  {x:2550, y:1347, sprite:"", sw:0, sh:0, hw:67, hh:67},
+  {x:2477, y:1291, sprite:"Img/Arbustazo.png", sw:39, sh:36, hw:25, hh:14},
+  {x:2332, y:1323, sprite:"Img/Arbustazo.png", sw:39, sh:36, hw:25, hh:16},
+  {x:2075, y:1349, sprite:"", sw:0, sh:0, hw:53, hh:43},
+  {x:2045, y:1635, sprite:"Img/Rocas.png", sw:50, sh:45, hw:40, hh:30},
+  {x:2105, y:1577, sprite:"Img/Rocas.png", sw:50, sh:45, hw:40, hh:30},
+  {x:2638, y:1842, sprite:"", sw:0, sh:0, hw:484, hh:369},
+  {x:2308, y:1839, sprite:"", sw:0, sh:0, hw:174, hh:307},
+  {x:2184, y:1839, sprite:"", sw:0, sh:0, hw:96, hh:251},
+  {x:1135, y:1418, sprite:"", sw:0, sh:0, hw:189, hh:28},
+  {x:1266, y:1433, sprite:"", sw:0, sh:0, hw:40, hh:31},
+  {x:1296, y:1464, sprite:"", sw:0, sh:0, hw:38, hh:35},
+  {x:1488, y:1367, sprite:"", sw:0, sh:0, hw:525, hh:37},
+  {x:1378, y:1402, sprite:"", sw:0, sh:0, hw:37, hh:40},
+  {x:1526, y:1404, sprite:"", sw:0, sh:0, hw:45, hh:35},
+  {x:1366, y:1721, sprite:"", sw:0, sh:0, hw:68, hh:246},
+  {x:1469, y:1720, sprite:"", sw:0, sh:0, hw:150, hh:118},
+  {x:1657, y:1720, sprite:"", sw:0, sh:0, hw:61, hh:248},
+  {x:1510, y:1488, sprite:"", sw:0, sh:0, hw:355, hh:57},
+  {x:1440, y:1518, sprite:"", sw:0, sh:0, hw:32, hh:31},
+  {x:1699, y:1392, sprite:"", sw:0, sh:0, hw:100, hh:25},
+  {x:1756, y:1418, sprite:"", sw:0, sh:0, hw:101, hh:32},
+  {x:1790, y:1868, sprite:"", sw:0, sh:0, hw:47, hh:482},
+  {x:1724, y:1466, sprite:"", sw:0, sh:0, hw:88, hh:34},
+  {x:1250, y:1414, sprite:"", sw:0, sh:0, hw:35, hh:55},
+  {x:1748, y:1868, sprite:"", sw:0, sh:0, hw:51, hh:52},
+  {x:1577, y:1869, sprite:"", sw:0, sh:0, hw:200, hh:50},
+  {x:1384, y:1808, sprite:"", sw:0, sh:0, hw:274, hh:44},
+  {x:1445, y:1842, sprite:"", sw:0, sh:0, hw:65, hh:41},
+  {x:1205, y:1781, sprite:"", sw:0, sh:0, hw:48, hh:271},
+  {x:1255, y:1766, sprite:"", sw:0, sh:0, hw:65, hh:58},
+  {x:1784, y:54, sprite:"", sw:0, sh:0, hw:48, hh:47},
+  {x:1903, y:107, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1468, y:223, sprite:"", sw:0, sh:0, hw:50, hh:55},
+  {x:1498, y:136, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1640, y:192, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1469, y:397, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2043, y:542, sprite:"", sw:0, sh:0, hw:51, hh:41},
+  {x:1958, y:654, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1786, y:833, sprite:"", sw:0, sh:0, hw:34, hh:21},
+  {x:1971, y:2048, sprite:"", sw:0, sh:0, hw:8, hh:8},
+  {x:2795, y:162, sprite:"", sw:0, sh:0, hw:171, hh:148},
+  {x:2768, y:196, sprite:"", sw:0, sh:0, hw:36, hh:53},
+  {x:2870, y:190, sprite:"", sw:0, sh:0, hw:21, hh:69},
+  {x:2854, y:275, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2594, y:78, sprite:"", sw:0, sh:0, hw:51, hh:62},
+  {x:2679, y:135, sprite:"", sw:0, sh:0, hw:44, hh:60},
+  {x:2625, y:165, sprite:"", sw:0, sh:0, hw:47, hh:62},
+  {x:2593, y:227, sprite:"", sw:0, sh:0, hw:55, hh:70},
+  {x:2164, y:78, sprite:"", sw:0, sh:0, hw:49, hh:59},
+  {x:2158, y:483, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2423, y:282, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2261, y:221, sprite:"", sw:0, sh:0, hw:199, hh:49},
+  {x:2452, y:540, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2708, y:885, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2693, y:400, sprite:"Img/CasaM.png", sw:125, sh:130, hw:111, hh:90},
+  {x:2795, y:401, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2866, y:567, sprite:"", sw:0, sh:0, hw:29, hh:151},
+  {x:2709, y:543, sprite:"Img/Arbustazo.png", sw:39, sh:36, hw:25, hh:16},
+  {x:2824, y:737, sprite:"", sw:0, sh:0, hw:113, hh:148},
+  {x:2824, y:769, sprite:"", sw:0, sh:0, hw:31, hh:38},
+  {x:2873, y:767, sprite:"", sw:0, sh:0, hw:14, hh:52},
+  {x:2870, y:884, sprite:"", sw:0, sh:0, hw:21, hh:64},
+  {x:2852, y:1053, sprite:"", sw:0, sh:0, hw:56, hh:149},
+  {x:2843, y:1082, sprite:"", sw:0, sh:0, hw:74, hh:56},
+  {x:2850, y:1171, sprite:"", sw:0, sh:0, hw:56, hh:60},
+  {x:2868, y:1256, sprite:"", sw:0, sh:0, hw:24, hh:59},
+  {x:2651, y:1374, sprite:"", sw:0, sh:0, hw:41, hh:64},
+  {x:2738, y:1402, sprite:"", sw:0, sh:0, hw:55, hh:65},
+  {x:2822, y:1427, sprite:"", sw:0, sh:0, hw:116, hh:151},
+  {x:2818, y:1470, sprite:"", sw:0, sh:0, hw:40, hh:59},
+  {x:1910, y:1713, sprite:"", sw:0, sh:0, hw:211, hh:91},
+  {x:1063, y:1550, sprite:"", sw:0, sh:0, hw:46, hh:131},
+  {x:1142, y:1552, sprite:"", sw:0, sh:0, hw:174, hh:42},
+  {x:1198, y:1872, sprite:"", sw:0, sh:0, hw:29, hh:23},
+  {x:1253, y:1870, sprite:"", sw:0, sh:0, hw:23, hh:23},
+  {x:1312, y:1873, sprite:"", sw:0, sh:0, hw:26, hh:25},
+  {x:1974, y:1872, sprite:"", sw:0, sh:0, hw:322, hh:175},
+  {x:1816, y:1896, sprite:"", sw:0, sh:0, hw:51, hh:43},
+  {x:2105, y:1896, sprite:"", sw:0, sh:0, hw:51, hh:44},
+  {x:2077, y:1955, sprite:"", sw:0, sh:0, hw:51, hh:52},
+  {x:2306, y:1926, sprite:"", sw:0, sh:0, hw:333, hh:73},
+  {x:2447, y:1956, sprite:"", sw:0, sh:0, hw:52, hh:40},
+  {x:2507, y:1895, sprite:"", sw:0, sh:0, hw:49, hh:47},
+  {x:2595, y:1868, sprite:"", sw:0, sh:0, hw:57, hh:38},
+  {x:2706, y:1930, sprite:"", sw:0, sh:0, hw:48, hh:21},
+  {x:2002, y:2016, sprite:"", sw:0, sh:0, hw:28, hh:25},
+  {x:2002, y:2104, sprite:"", sw:0, sh:0, hw:28, hh:27},
+  {x:2089, y:2018, sprite:"", sw:0, sh:0, hw:27, hh:26},
+  {x:2088, y:2102, sprite:"", sw:0, sh:0, hw:27, hh:24},
+  {x:2176, y:2016, sprite:"", sw:0, sh:0, hw:27, hh:26},
+  {x:2175, y:2102, sprite:"", sw:0, sh:0, hw:29, hh:24},
+  {x:2262, y:2015, sprite:"", sw:0, sh:0, hw:26, hh:25},
+  {x:2261, y:2102, sprite:"", sw:0, sh:0, hw:27, hh:24},
+  {x:2349, y:2016, sprite:"", sw:0, sh:0, hw:27, hh:24},
+  {x:2350, y:2102, sprite:"", sw:0, sh:0, hw:30, hh:25},
+  {x:2436, y:2016, sprite:"", sw:0, sh:0, hw:27, hh:25},
+  {x:2434, y:2101, sprite:"", sw:0, sh:0, hw:26, hh:24},
+  {x:2633, y:1951, sprite:"", sw:0, sh:0, hw:254, hh:22},
+  {x:2821, y:2065, sprite:"", sw:0, sh:0, hw:119, hh:151},
+  {x:503, y:1667, sprite:"", sw:0, sh:0, hw:247, hh:103},
+  {x:546, y:1720, sprite:"", sw:0, sh:0, hw:158, hh:66},
+  {x:951, y:1804, sprite:"", sw:0, sh:0, hw:458, hh:60},
+  {x:838, y:1724, sprite:"Img/Arbustazo.png", sw:39, sh:36, hw:25, hh:16},
+  {x:953, y:1699, sprite:"Img/Rocas.png", sw:50, sh:45, hw:40, hh:30},
+  {x:1093, y:1726, sprite:"Img/Rocas.png", sw:50, sh:45, hw:40, hh:30},
+  {x:713, y:1437, sprite:"", sw:0, sh:0, hw:406, hh:25},
+  {x:514, y:1468, sprite:"", sw:0, sh:0, hw:8, hh:53},
+  {x:465, y:1468, sprite:"", sw:0, sh:0, hw:8, hh:57},
+  {x:408, y:1436, sprite:"", sw:0, sh:0, hw:115, hh:21},
+  {x:345, y:1519, sprite:"", sw:0, sh:0, hw:46, hh:72},
+  {x:361, y:1461, sprite:"", sw:0, sh:0, hw:21, hh:38},
+  {x:322, y:1465, sprite:"", sw:0, sh:0, hw:51, hh:20},
+  {x:304, y:1522, sprite:"", sw:0, sh:0, hw:16, hh:63},
+  {x:269, y:1523, sprite:"", sw:0, sh:0, hw:67, hh:18},
+  {x:246, y:1637, sprite:"", sw:0, sh:0, hw:18, hh:123},
+  {x:210, y:1636, sprite:"", sw:0, sh:0, hw:74, hh:20},
+  {x:177, y:1693, sprite:"", sw:0, sh:0, hw:36, hh:60},
+  {x:259, y:1490, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:275, y:1263, sprite:"Img/CasaA.png", sw:125, sh:130, hw:111, hh:90},
+  {x:506, y:1267, sprite:"Img/CasaR.png", sw:125, sh:130, hw:111, hh:90},
+  {x:376, y:1258, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:113, y:849, sprite:"", sw:0, sh:0, hw:222, hh:8},
+  {x:219, y:901, sprite:"", sw:0, sh:0, hw:14, hh:55},
+  {x:247, y:907, sprite:"", sw:0, sh:0, hw:72, hh:8},
+  {x:275, y:958, sprite:"", sw:0, sh:0, hw:16, hh:55},
+  {x:304, y:970, sprite:"", sw:0, sh:0, hw:68, hh:14},
+  {x:332, y:1017, sprite:"", sw:0, sh:0, hw:14, hh:54},
+  {x:403, y:1022, sprite:"", sw:0, sh:0, hw:157, hh:8},
+  {x:473, y:1018, sprite:"", sw:0, sh:0, hw:16, hh:290},
+  {x:433, y:884, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:617, y:733, sprite:"", sw:0, sh:0, hw:306, hh:8},
+  {x:762, y:728, sprite:"", sw:0, sh:0, hw:17, hh:30},
+  {x:815, y:704, sprite:"", sw:0, sh:0, hw:118, hh:8},
+  {x:879, y:787, sprite:"", sw:0, sh:0, hw:17, hh:87},
+  {x:939, y:858, sprite:"", sw:0, sh:0, hw:16, hh:69},
+  {x:906, y:861, sprite:"", sw:0, sh:0, hw:72, hh:17},
+  {x:879, y:887, sprite:"", sw:0, sh:0, hw:17, hh:35},
+  {x:848, y:890, sprite:"", sw:0, sh:0, hw:74, hh:19},
+  {x:820, y:916, sprite:"", sw:0, sh:0, hw:23, hh:27},
+  {x:775, y:918, sprite:"", sw:0, sh:0, hw:97, hh:16},
+  {x:907, y:789, sprite:"", sw:0, sh:0, hw:59, hh:8},
+  {x:703, y:945, sprite:"", sw:0, sh:0, hw:78, hh:17},
+  {x:734, y:937, sprite:"", sw:0, sh:0, hw:14, hh:19},
+  {x:677, y:1162, sprite:"", sw:0, sh:0, hw:21, hh:224},
+  {x:737, y:1218, sprite:"", sw:0, sh:0, hw:17, hh:58},
+  {x:700, y:1165, sprite:"", sw:0, sh:0, hw:62, hh:8},
+  {x:777, y:1222, sprite:"", sw:0, sh:0, hw:78, hh:8},
+  {x:822, y:1278, sprite:"", sw:0, sh:0, hw:17, hh:59},
+  {x:879, y:1308, sprite:"", sw:0, sh:0, hw:18, hh:30},
+  {x:849, y:1280, sprite:"", sw:0, sh:0, hw:58, hh:8},
+  {x:921, y:1408, sprite:"", sw:0, sh:0, hw:50, hh:17},
+  {x:937, y:1397, sprite:"", sw:0, sh:0, hw:19, hh:95},
+  {x:908, y:1311, sprite:"", sw:0, sh:0, hw:57, hh:9},
+  {x:693, y:1258, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:877, y:601, sprite:"", sw:0, sh:0, hw:80, hh:78},
+  {x:1238, y:689, sprite:"", sw:0, sh:0, hw:207, hh:27},
+  {x:865, y:367, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1098, y:400, sprite:"", sw:0, sh:0, hw:39, hh:20},
+  {x:1037, y:516, sprite:"Img/Rocas.png", sw:50, sh:45, hw:40, hh:30},
+  {x:761, y:371, sprite:"Img/Pozo.png", sw:40, sh:55, hw:30, hh:18},
+  {x:432, y:403, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:763, y:602, sprite:"Img/CasaM.png", sw:125, sh:130, hw:111, hh:90},
+  {x:504, y:603, sprite:"Img/CasaA.png", sw:125, sh:130, hw:111, hh:90},
+  {x:604, y:602, sprite:"Img/Arbustazo.png", sw:39, sh:36, hw:25, hh:19},
+  {x:663, y:600, sprite:"Img/Arbustazo.png", sw:39, sh:36, hw:25, hh:17},
+  {x:294, y:227, sprite:"Img/Arbustazo.png", sw:39, sh:36, hw:25, hh:19},
+  {x:434, y:251, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:271, y:400, sprite:"Img/CasaM.png", sw:125, sh:130, hw:111, hh:90},
+  {x:171, y:395, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:116, y:371, sprite:"Img/Arbustazo.png", sw:39, sh:36, hw:25, hh:17},
+  {x:289, y:140, sprite:"Img/Arbustazo.png", sw:39, sh:36, hw:25, hh:11},
+  {x:187, y:227, sprite:"Img/CasaR.png", sw:125, sh:130, hw:111, hh:90},
+  {x:461, y:110, sprite:"Img/Arbustazo.png", sw:39, sh:36, hw:25, hh:18},
+  {x:374, y:171, sprite:"Img/Arbustazo.png", sw:39, sh:36, hw:25, hh:11},
+  {x:1327, y:143, sprite:"", sw:0, sh:0, hw:40, hh:22},
+  {x:2018, y:1142, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1986, y:1229, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2075, y:1229, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1672, y:1005, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1297, y:941, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1211, y:338, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:979, y:221, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:821, y:228, sprite:"Img/CasaA.png", sw:125, sh:130, hw:111, hh:90},
+  {x:558, y:258, sprite:"Img/CasaM.png", sw:125, sh:130, hw:111, hh:90},
+  {x:661, y:256, sprite:"Img/Arbustazo.png", sw:39, sh:36, hw:25, hh:10},
+  {x:723, y:115, sprite:"Img/Arbustazo.png", sw:39, sh:36, hw:25, hh:12},
+  {x:950, y:80, sprite:"Img/Arbustazo.png", sw:39, sh:36, hw:25, hh:14},
+  {x:1210, y:107, sprite:"", sw:0, sh:0, hw:47, hh:65},
+  {x:2047, y:1034, sprite:"", sw:0, sh:0, hw:38, hh:21},
+  {x:2415, y:913, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2476, y:1112, sprite:"Img/Rocas.png", sw:50, sh:45, hw:40, hh:30},
+  {x:577, y:1837, sprite:"", sw:0, sh:0, hw:50, hh:46},
+  {x:806, y:1839, sprite:"", sw:0, sh:0, hw:51, hh:52},
+  {x:933, y:2039, sprite:"", sw:0, sh:0, hw:188, hh:271},
+  {x:1047, y:1928, sprite:"", sw:0, sh:0, hw:90, hh:147},
+  {x:1068, y:1985, sprite:"", sw:0, sh:0, hw:53, hh:50},
+  {x:271, y:1864, sprite:"", sw:0, sh:0, hw:73, hh:80},
+  {x:209, y:1920, sprite:"", sw:0, sh:0, hw:96, hh:97},
+  {x:128, y:2116, sprite:"", sw:0, sh:0, hw:255, hh:123},
+  {x:290, y:2017, sprite:"", sw:0, sh:0, hw:53, hh:51},
+  {x:2216, y:368, sprite:"", sw:0, sh:0, hw:36, hh:40},
+  {x:2333, y:368, sprite:"", sw:0, sh:0, hw:33, hh:43},
+  {x:2392, y:194, sprite:"", sw:0, sh:0, hw:32, hh:49},
+  {x:2445, y:193, sprite:"", sw:0, sh:0, hw:42, hh:50},
+  {x:1499, y:659, sprite:"Img/Rocas.png", sw:50, sh:45, hw:40, hh:30},
+  {x:2876, y:2880, sprite:"", sw:0, sh:0, hw:8, hh:2878},
+  {x:292, y:2116, sprite:"", sw:0, sh:0, hw:67, hh:66},
+  {x:358, y:2133, sprite:"", sw:0, sh:0, hw:84, hh:48},
+  {x:421, y:2148, sprite:"", sw:0, sh:0, hw:63, hh:35},
+  {x:453, y:2217, sprite:"", sw:0, sh:0, hw:65, hh:76},
+  {x:542, y:2288, sprite:"", sw:0, sh:0, hw:120, hh:89},
+  {x:607, y:2268, sprite:"", sw:0, sh:0, hw:45, hh:40},
+  {x:648, y:2307, sprite:"", sw:0, sh:0, hw:82, hh:52},
+  {x:711, y:2339, sprite:"", sw:0, sh:0, hw:63, hh:54},
+  {x:764, y:2352, sprite:"", sw:0, sh:0, hw:77, hh:38},
+  {x:822, y:2389, sprite:"", sw:0, sh:0, hw:59, hh:46},
+  {x:854, y:2432, sprite:"", sw:0, sh:0, hw:62, hh:60},
+  {x:884, y:2528, sprite:"", sw:0, sh:0, hw:67, hh:96},
+  {x:904, y:2627, sprite:"", sw:0, sh:0, hw:82, hh:106},
+  {x:1113, y:2880, sprite:"", sw:0, sh:0, hw:124, hh:78},
+  {x:1079, y:2806, sprite:"", sw:0, sh:0, hw:67, hh:35},
+  {x:1053, y:2802, sprite:"", sw:0, sh:0, hw:66, hh:83},
+  {x:1035, y:2726, sprite:"", sw:0, sh:0, hw:47, hh:41},
+  {x:997, y:2714, sprite:"", sw:0, sh:0, hw:62, hh:57},
+  {x:962, y:2675, sprite:"", sw:0, sh:0, hw:78, hh:45},
+  {x:948, y:2640, sprite:"", sw:0, sh:0, hw:44, hh:39},
+  {x:492, y:2102, sprite:"", sw:0, sh:0, hw:46, hh:57},
+  {x:548, y:2189, sprite:"", sw:0, sh:0, hw:47, hh:48},
+  {x:808, y:2041, sprite:"", sw:0, sh:0, hw:43, hh:53},
+  {x:1438, y:2370, sprite:"", sw:0, sh:0, hw:624, hh:32},
+  {x:1732, y:2531, sprite:"", sw:0, sh:0, hw:81, hh:52},
+  {x:1738, y:2482, sprite:"", sw:0, sh:0, hw:63, hh:111},
+  {x:1150, y:2529, sprite:"", sw:0, sh:0, hw:48, hh:173},
+  {x:1398, y:2529, sprite:"", sw:0, sh:0, hw:505, hh:52},
+  {x:1764, y:2636, sprite:"", sw:0, sh:0, hw:14, hh:112},
+  {x:2024, y:2880, sprite:"", sw:0, sh:0, hw:1713, hh:49},
+  {x:1732, y:2651, sprite:"", sw:0, sh:0, hw:10, hh:9},
+  {x:1753, y:2639, sprite:"", sw:0, sh:0, hw:9, hh:10},
+  {x:1763, y:2832, sprite:"", sw:0, sh:0, hw:14, hh:167},
+  {x:1860, y:2823, sprite:"", sw:0, sh:0, hw:196, hh:41},
+  {x:1733, y:2702, sprite:"", sw:0, sh:0, hw:9, hh:10},
+  {x:1753, y:2691, sprite:"", sw:0, sh:0, hw:10, hh:12},
+  {x:1987, y:2360, sprite:"", sw:0, sh:0, hw:49, hh:46},
+  {x:1952, y:2375, sprite:"", sw:0, sh:0, hw:390, hh:14},
+  {x:1807, y:2413, sprite:"", sw:0, sh:0, hw:32, hh:36},
+  {x:1830, y:2397, sprite:"", sw:0, sh:0, hw:23, hh:24},
+  {x:2260, y:2203, sprite:"", sw:0, sh:0, hw:257, hh:14},
+  {x:2488, y:2295, sprite:"", sw:0, sh:0, hw:195, hh:153},
+  {x:2138, y:2372, sprite:"", sw:0, sh:0, hw:11, hh:173},
+  {x:2383, y:2376, sprite:"", sw:0, sh:0, hw:12, hh:182},
+  {x:2415, y:2376, sprite:"", sw:0, sh:0, hw:66, hh:14},
+  {x:2418, y:2360, sprite:"", sw:0, sh:0, hw:56, hh:46},
+  {x:2304, y:2192, sprite:"", sw:0, sh:0, hw:38, hh:25},
+  {x:1952, y:2803, sprite:"", sw:0, sh:0, hw:13, hh:282},
+  {x:2106, y:2533, sprite:"", sw:0, sh:0, hw:308, hh:11},
+  {x:2254, y:2677, sprite:"", sw:0, sh:0, hw:12, hh:150},
+  {x:2102, y:2562, sprite:"", sw:0, sh:0, hw:296, hh:30},
+  {x:1981, y:2586, sprite:"", sw:0, sh:0, hw:30, hh:34},
+  {x:2000, y:2574, sprite:"", sw:0, sh:0, hw:26, hh:28},
+  {x:2211, y:2588, sprite:"", sw:0, sh:0, hw:33, hh:35},
+  {x:2225, y:2574, sprite:"", sw:0, sh:0, hw:37, hh:35},
+  {x:2513, y:2130, sprite:"", sw:0, sh:0, hw:14, hh:187},
+  {x:2572, y:2101, sprite:"", sw:0, sh:0, hw:123, hh:11},
+  {x:2574, y:2130, sprite:"", sw:0, sh:0, hw:108, hh:33},
+  {x:2625, y:2159, sprite:"", sw:0, sh:0, hw:9, hh:63},
+  {x:2674, y:2158, sprite:"", sw:0, sh:0, hw:8, hh:64},
+  {x:2758, y:2102, sprite:"", sw:0, sh:0, hw:12, hh:165},
+  {x:2719, y:2130, sprite:"", sw:0, sh:0, hw:90, hh:39},
+  {x:2673, y:2103, sprite:"", sw:0, sh:0, hw:16, hh:14},
+  {x:2700, y:2154, sprite:"", sw:0, sh:0, hw:27, hh:34},
+  {x:2717, y:2143, sprite:"", sw:0, sh:0, hw:32, hh:35},
+  {x:2507, y:2473, sprite:"", sw:0, sh:0, hw:50, hh:46},
+  {x:2442, y:2548, sprite:"", sw:0, sh:0, hw:13, hh:180},
+  {x:2500, y:2550, sprite:"", sw:0, sh:0, hw:123, hh:15},
+  {x:2404, y:2706, sprite:"", sw:0, sh:0, hw:314, hh:39},
+  {x:2555, y:2676, sprite:"", sw:0, sh:0, hw:11, hh:68},
+  {x:2556, y:2576, sprite:"", sw:0, sh:0, hw:10, hh:33},
+  {x:2574, y:2649, sprite:"", sw:0, sh:0, hw:32, hh:13},
+  {x:2569, y:2632, sprite:"", sw:0, sh:0, hw:11, hh:10},
+  {x:2567, y:2582, sprite:"", sw:0, sh:0, hw:10, hh:9},
+  {x:2586, y:2595, sprite:"", sw:0, sh:0, hw:10, hh:9},
+  {x:1742, y:2705, sprite:"", sw:0, sh:0, hw:23, hh:10},
+  {x:2855, y:2841, sprite:"", sw:0, sh:0, hw:51, hh:529},
+  {x:2824, y:2294, sprite:"", sw:0, sh:0, hw:112, hh:151},
+  {x:2751, y:1895, sprite:"", sw:0, sh:0, hw:259, hh:73},
+  {x:1769, y:8, sprite:"", sw:0, sh:0, hw:636, hh:8},
+  {x:1605, y:1895, sprite:"", sw:0, sh:0, hw:31, hh:32},
+  {x:1628, y:1883, sprite:"", sw:0, sh:0, hw:20, hh:19},
+  {x:1469, y:2067, sprite:"", sw:0, sh:0, hw:105, hh:75},
+  {x:1497, y:2096, sprite:"", sw:0, sh:0, hw:107, hh:76},
+  {x:1526, y:2127, sprite:"", sw:0, sh:0, hw:107, hh:77},
+  {x:1555, y:2155, sprite:"", sw:0, sh:0, hw:107, hh:76},
+  {x:1670, y:2184, sprite:"", sw:0, sh:0, hw:280, hh:76},
+  {x:2602, y:2155, sprite:"", sw:0, sh:0, hw:36, hh:26},
+  {x:1833, y:982, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:198, y:1593, sprite:"Img/Arbustazo.png", sw:39, sh:36, hw:25, hh:15},
+  {x:2724, y:1124, sprite:"Img/Rocas.png", sw:50, sh:45, hw:40, hh:30},
+  {x:2035, y:299, sprite:"Img/Rocas.png", sw:50, sh:45, hw:40, hh:30},
+  {x:993, y:814, sprite:"Img/Arco-flores.png", sw:82, sh:82, hw:-100, hh:-100},
+  {x:936, y:721, sprite:"Img/Arco-flores.png", sw:82, sh:82, hw:-100, hh:-100},
+  {x:903, y:717, sprite:"", sw:0, sh:0, hw:17, hh:15},
+  {x:971, y:718, sprite:"", sw:0, sh:0, hw:15, hh:15},
+  {x:960, y:811, sprite:"", sw:0, sh:0, hw:16, hh:17},
+  {x:1031, y:812, sprite:"", sw:0, sh:0, hw:22, hh:17},
+  {x:1790, y:682, sprite:"Img/Venta1.png", sw:60, sh:60, hw:50, hh:30},
+  {x:260, y:547, sprite:"Img/Venta2.png", sw:60, sh:60, hw:-100, hh:-100},
+  {x:323, y:547, sprite:"Img/Venta3.png", sw:60, sh:60, hw:50, hh:30},
+  {x:386, y:547, sprite:"Img/Venta2.png", sw:60, sh:60, hw:-100, hh:-100},
+  {x:911, y:1585, sprite:"Img/Venta1.png", sw:60, sh:60, hw:50, hh:30},
+  {x:1038, y:1632, sprite:"Img/Venta3.png", sw:60, sh:60, hw:50, hh:30},
+  {x:769, y:1620, sprite:"Img/Venta2.png", sw:60, sh:60, hw:-100, hh:-100},
+  {x:239, y:549, sprite:"", sw:0, sh:0, hw:8, hh:27},
+  {x:285, y:548, sprite:"", sw:0, sh:0, hw:11, hh:26},
+  {x:360, y:546, sprite:"", sw:0, sh:0, hw:16, hh:24},
+  {x:406, y:548, sprite:"", sw:0, sh:0, hw:9, hh:28},
+  {x:748, y:1626, sprite:"", sw:0, sh:0, hw:9, hh:36},
+  {x:792, y:1625, sprite:"", sw:0, sh:0, hw:11, hh:37},
+  {x:2245, y:339, sprite:"", sw:0, sh:0, hw:33, hh:16},
+  {x:2305, y:337, sprite:"", sw:0, sh:0, hw:30, hh:16},
+  {x:2795, y:167, sprite:"", sw:0, sh:0, hw:30, hh:19},
+  {x:2852, y:169, sprite:"", sw:0, sh:0, hw:29, hh:25},
+  {x:359, y:230, sprite:"Img/Banca.png", sw:35, sh:20, hw:29, hh:11},
+  {x:470, y:434, sprite:"Img/Banca.png", sw:35, sh:20, hw:29, hh:11},
+  {x:248, y:600, sprite:"Img/Banca.png", sw:35, sh:20, hw:29, hh:11},
+  {x:595, y:536, sprite:"Img/Banca.png", sw:35, sh:20, hw:29, hh:11},
+  {x:915, y:231, sprite:"Img/Banca.png", sw:35, sh:20, hw:29, hh:11},
+  {x:708, y:230, sprite:"Img/Banca.png", sw:35, sh:20, hw:29, hh:11},
+  {x:1259, y:415, sprite:"Img/Banca.png", sw:35, sh:20, hw:29, hh:11},
+  {x:2052, y:606, sprite:"Img/Banca.png", sw:35, sh:20, hw:29, hh:11},
+  {x:2117, y:606, sprite:"Img/Banca.png", sw:35, sh:20, hw:29, hh:11},
+  {x:1771, y:322, sprite:"Img/Banca.png", sw:35, sh:20, hw:29, hh:11},
+  {x:1828, y:1119, sprite:"Img/Banca.png", sw:35, sh:20, hw:29, hh:11},
+  {x:1238, y:1192, sprite:"Img/Banca.png", sw:35, sh:20, hw:29, hh:11},
+  {x:1524, y:1514, sprite:"Img/Banca.png", sw:35, sh:20, hw:29, hh:11},
+  {x:983, y:1633, sprite:"Img/Banca.png", sw:35, sh:20, hw:29, hh:11},
+  {x:2463, y:425, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2387, y:612, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2733, y:655, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2445, y:645, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2471, y:685, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2528, y:635, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2348, y:715, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2666, y:638, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2511, y:577, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2668, y:740, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2755, y:871, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2484, y:892, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2703, y:956, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2774, y:1028, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2548, y:1005, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2478, y:1044, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2675, y:1059, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2417, y:1145, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2653, y:1160, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2349, y:928, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2358, y:1035, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2314, y:1075, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2279, y:1117, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2264, y:1182, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2297, y:1258, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2354, y:1283, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2550, y:1447, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2694, y:1444, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2315, y:1438, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2177, y:1311, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2224, y:1269, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2183, y:1518, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2364, y:1514, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1949, y:1607, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1856, y:1491, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1842, y:1561, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2022, y:1348, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1980, y:1385, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1767, y:1350, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1825, y:1387, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1826, y:1280, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1869, y:1324, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1688, y:1315, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1744, y:1196, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1610, y:1201, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1587, y:1305, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1523, y:1266, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1502, y:1202, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1425, y:1253, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1335, y:1292, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1187, y:1319, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1155, y:1281, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1141, y:1370, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1081, y:1329, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1025, y:1201, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1074, y:1238, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1120, y:1213, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1169, y:1206, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:1995, y:1628, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2187, y:1576, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2266, y:1488, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2147, y:1387, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2285, y:1325, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2460, y:1347, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2420, y:1463, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2605, y:1259, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2725, y:1283, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2808, y:1246, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2732, y:1200, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2509, y:1162, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2462, y:954, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2410, y:968, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2349, y:1165, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2789, y:936, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2581, y:924, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2690, y:820, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2548, y:309, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2522, y:487, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2684, y:506, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:2815, y:505, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+
+  {x:1391, y:2400, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1582, y:2469, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1705, y:2792, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1393, y:2788, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1112, y:2714, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:833, y:2254, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1204, y:2296, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:425, y:2007, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:542, y:1894, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1947, y:2265, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:2129, y:2146, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:2788, y:2525, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:2641, y:2770, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:2795, y:2796, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1255, y:2793, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:802, y:2611, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1146, y:1936, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:2306, y:2063, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:2366, y:2169, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:2390, y:1948, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:2216, y:1965, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1999, y:1905, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1920, y:1981, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1867, y:1900, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:820, y:1874, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:795, y:1970, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:352, y:1921, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:465, y:1833, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:605, y:2143, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:700, y:2215, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:893, y:2323, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:930, y:2242, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1137, y:2153, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1309, y:2122, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1504, y:2197, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1474, y:2159, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1441, y:2132, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1413, y:2093, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1275, y:2040, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1309, y:2010, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:1801, y:2297, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:2108, y:2349, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:2030, y:2701, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:2175, y:2672, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:2470, y:2527, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:2577, y:2498, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:2205, y:2701, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:2205, y:2701, sprite:"Img/arbolseco.png", sw:35, sh:75, hw:15, hh:15},
+  {x:381, y:1708, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+  {x:446, y:1706, sprite:"Img/Arbol.png", sw:50, sh:75, hw:20, hh:30},
+];
+const entities = [];
+
+/* MONEDAS */
+const coinsMap = [
+  {x:85, y:902},
+  {x:104, y:902},
+  {x:123, y:902},
+  {x:1339, y:712},
+  {x:1318, y:712},
+  {x:1298, y:712},
+  {x:376, y:990},
+  {x:396, y:990},
+  {x:416, y:990},
+  {x:436, y:990},
+  {x:99, y:79},
+  {x:118, y:79},
+  {x:137, y:79},
+  {x:156, y:79},
+  {x:175, y:79},
+  {x:1336, y:165},
+  {x:1337, y:184},
+  {x:1390, y:128},
+  {x:1411, y:128},
+  {x:1430, y:128},
+  {x:1609, y:106},
+  {x:1588, y:94},
+  {x:1587, y:70},
+  {x:1609, y:55},
+  {x:1629, y:69},
+  {x:1629, y:92},
+  {x:1911, y:27},
+  {x:1891, y:27},
+  {x:1869, y:27},
+  {x:2375, y:222},
+  {x:2396, y:221},
+  {x:2473, y:222},
+  {x:2450, y:222},
+  {x:231, y:1682},
+  {x:251, y:1682},
+  {x:272, y:1682},
+  {x:291, y:1682},
+  {x:312, y:1682},
+  {x:332, y:1682},
+  {x:351, y:1682},
+  {x:915, y:805},
+  {x:916, y:837},
+  {x:853, y:725},
+  {x:788, y:725},
+  {x:821, y:725},
+  {x:1517, y:593},
+  {x:1536, y:593},
+  {x:1556, y:593},
+  {x:1077, y:1051},
+  {x:1098, y:1051},
+  {x:1119, y:1051},
+  {x:181, y:1613},
+  {x:201, y:1613},
+  {x:221, y:1614},
+  {x:1430, y:1565},
+  {x:1450, y:1565},
+  {x:1202, y:2397},
+  {x:1225, y:2397},
+  {x:1249, y:2398},
+  {x:1201, y:2420},
+  {x:1201, y:2443},
+  {x:1225, y:2443},
+  {x:1249, y:2420},
+  {x:1248, y:2443},
+  {x:2043, y:1683},
+  {x:2062, y:1683},
+  {x:2081, y:1683},
+  {x:2029, y:2585},
+  {x:2087, y:2584},
+  {x:2147, y:2585},
+  {x:2060, y:2584},
+  {x:2117, y:2584},
+  {x:2169, y:2235},
+  {x:2197, y:2235},
+  {x:2225, y:2235},
+  {x:2341, y:2235},
+  {x:2313, y:2235},
+  {x:2177, y:2038},
+  {x:2175, y:2123},
+  {x:2432, y:2036},
+  {x:2806, y:2091},
+  {x:2827, y:2092},
+  {x:2846, y:2093},
+  {x:471, y:1741},
+  {x:490, y:1741},
+  {x:509, y:1741},
+  {x:1112, y:1492},
+  {x:1112, y:1474},
+  {x:1112, y:1456},
+  {x:2099, y:1683},
+  {x:2118, y:1683},
+  {x:1355, y:578},
+  {x:1336, y:564},
+  {x:1336, y:544},
+  {x:1355, y:530},
+  {x:1374, y:545},
+  {x:1374, y:564},
+  {x:1453, y:1322},
+  {x:1475, y:1322},
+  {x:1496, y:1322},
+  {x:2018, y:200},
+  {x:2039, y:200},
+  {x:2062, y:199},
+  {x:918, y:1325},
+  {x:918, y:1386},
+  {x:1194, y:1892},
+  {x:2285, y:2235},
+  {x:2664, y:170},
+  {x:2688, y:170},
+  {x:2676, y:188},
+  {x:506, y:79},
+  {x:527, y:79},
+  {x:547, y:79},
+  {x:568, y:79},
+  {x:589, y:79},
+  {x:2562, y:1891},
+  {x:2584, y:1891},
+  {x:2604, y:1891},
+  {x:698, y:1154},
+  {x:699, y:964},
+  {x:698, y:1058},
+  {x:699, y:1006},
+  {x:698, y:1104},
+  {x:1290, y:1193},
+  {x:1310, y:1193},
+  {x:1332, y:1193},
+  {x:1354, y:1193},
+  {x:1432, y:1322},
+  {x:1225, y:2420},
+  {x:2562, y:1910},
+  {x:2584, y:1910},
+  {x:2605, y:1910},
+  {x:2435, y:2122},
+  {x:2841, y:552},
+  {x:2841, y:572},
+  {x:2820, y:573},
+  {x:2033, y:1247},
+  {x:2053, y:1247},
+  {x:2074, y:1247},
+  {x:2012, y:1247},
+  {x:1990, y:1247},
+  {x:2798, y:2797},
+  {x:2798, y:2817},
+  {x:2779, y:2805},
+  {x:1218, y:2798},
+  {x:1206, y:2780},
+  {x:1227, y:2779},
+  {x:918, y:1345},
+  {x:918, y:1365},
+  {x:1168, y:1574},
+  {x:1165, y:1728},
+  {x:1812, y:692},
+  {x:1832, y:693},
+  {x:1796, y:704},
+  {x:1848, y:705},
+  {x:1796, y:725},
+  {x:1848, y:725},
+  {x:1812, y:740},
+  {x:1832, y:740},
+  {x:1822, y:715},
+  {x:1998, y:200},
+  {x:1762, y:1384},
+  {x:1781, y:1384},
+  {x:1801, y:1384},
+  {x:2175, y:2585},
+  {x:213, y:1957},
+  {x:199, y:1974},
+  {x:219, y:1975},
+  {x:487, y:2129},
+  {x:507, y:2129},
+  {x:1167, y:1651},
+];
+
+const payBlocksMap = [
+  // Puedes agregar sprite, sw y sh si quieres imagen personalizada.
+  // Ejemplo: {x:2792, y:240, price:5, hw:24, hh:20, sprite:"Img/MiBloque.png", sw:32, sh:32}
+  {x:994, y:803, price:30, hw:24, hh:20},
+  {x:490, y:1414, price:50, hw:24, hh:20},
+];
+
+const coinsEntities = [];
+const payBlocksEntities = [];
+const bushesMap = [
+  {x:1120, y:690},
+  {x:1097, y:690},
+  {x:1074, y:691},
+  {x:1163, y:575},
+  {x:1178, y:592},
+  {x:1194, y:610},
+  {x:1211, y:627},
+  {x:1227, y:644},
+  {x:1242, y:664},
+  {x:1321, y:510},
+  {x:1321, y:528},
+  {x:1321, y:546},
+  {x:1321, y:564},
+  {x:1394, y:631},
+  {x:1394, y:609},
+  {x:1395, y:587},
+  {x:1395, y:565},
+  {x:1430, y:394},
+  {x:1407, y:394},
+  {x:1386, y:395},
+  {x:1504, y:394},
+  {x:1526, y:394},
+  {x:1547, y:394},
+  {x:1970, y:396},
+  {x:1970, y:416},
+  {x:1993, y:396},
+  {x:1993, y:416},
+  {x:2019, y:396},
+  {x:2018, y:416},
+  {x:2046, y:396},
+  {x:2046, y:416},
+  {x:2068, y:396},
+  {x:2068, y:416},
+  {x:1617, y:478},
+  {x:1756, y:537},
+  {x:1754, y:507},
+  {x:1772, y:433},
+  {x:1757, y:223},
+  {x:1775, y:223},
+  {x:1896, y:224},
+  {x:1919, y:224},
+  {x:861, y:769},
+  {x:861, y:790},
+  {x:861, y:810},
+  {x:781, y:747},
+  {x:801, y:747},
+  {x:861, y:747},
+  {x:673, y:858},
+  {x:536, y:997},
+  {x:517, y:772},
+  {x:176, y:1038},
+  {x:201, y:1009},
+  {x:223, y:984},
+  {x:423, y:1262},
+  {x:441, y:1384},
+  {x:789, y:1385},
+  {x:832, y:1346},
+  {x:796, y:1288},
+  {x:1222, y:1479},
+  {x:1199, y:1453},
+  {x:1140, y:1466},
+  {x:1519, y:1759},
+  {x:1569, y:1719},
+  {x:1601, y:1720},
+  {x:1656, y:1777},
+  {x:1294, y:1594},
+  {x:1475, y:2467},
+  {x:1475, y:2442},
+  {x:1475, y:2418},
+  {x:1475, y:2397},
+  {x:1141, y:1953},
+  {x:1151, y:1890},
+  {x:488, y:1868},
+  {x:391, y:1972},
+  {x:352, y:1539},
+  {x:371, y:1539},
+  {x:371, y:1561},
+  {x:351, y:1561},
+  {x:330, y:1539},
+  {x:351, y:1586},
+  {x:616, y:1741},
+  {x:855, y:1649},
+  {x:757, y:1571},
+  {x:782, y:1571},
+  {x:729, y:1153},
+  {x:729, y:1132},
+  {x:729, y:1113},
+  {x:729, y:1094},
+  {x:729, y:1075},
+  {x:729, y:1055},
+  {x:729, y:1035},
+  {x:729, y:1015},
+  {x:729, y:995},
+  {x:729, y:976},
+  {x:880, y:1084},
+  {x:928, y:1042},
+  {x:964, y:976},
+  {x:1685, y:1022},
+  {x:1685, y:1043},
+  {x:1685, y:1066},
+  {x:1703, y:1085},
+  {x:1703, y:1103},
+  {x:1168, y:908},
+  {x:1211, y:923},
+  {x:1208, y:739},
+  {x:1207, y:759},
+  {x:1271, y:736},
+  {x:1686, y:718},
+  {x:1686, y:697},
+  {x:1686, y:678},
+  {x:1687, y:656},
+  {x:1728, y:793},
+  {x:1747, y:793},
+  {x:1766, y:793},
+  {x:1957, y:708},
+  {x:1866, y:788},
+  {x:2090, y:670},
+  {x:1855, y:670},
+  {x:2064, y:713},
+  {x:2237, y:616},
+  {x:2198, y:693},
+  {x:2133, y:557},
+  {x:2145, y:622},
+  {x:1749, y:688},
+  {x:1570, y:705},
+  {x:1609, y:629},
+  {x:1470, y:722},
+  {x:1622, y:675},
+  {x:1655, y:606},
+  {x:2302, y:442},
+  {x:2250, y:461},
+  {x:2266, y:530},
+  {x:2194, y:543},
+  {x:2094, y:944},
+  {x:2117, y:997},
+  {x:1858, y:1088},
+  {x:2100, y:1105},
+  {x:2170, y:1030},
+  {x:1804, y:971},
+  {x:1970, y:1032},
+  {x:1523, y:979},
+  {x:1595, y:984},
+  {x:2680, y:590},
+  {x:2735, y:692},
+  {x:2485, y:652},
+  {x:2527, y:536},
+  {x:2483, y:451},
+  {x:2514, y:508},
+  {x:2782, y:210},
+  {x:2769, y:231},
+  {x:2752, y:216},
+  {x:2813, y:284},
+  {x:2812, y:305},
+  {x:2736, y:235},
+  {x:2788, y:299},
+  {x:2629, y:247},
+  {x:2592, y:282},
+  {x:2612, y:269},
+  {x:2537, y:332},
+  {x:2510, y:356},
+  {x:2567, y:391},
+  {x:2785, y:556},
+  {x:2644, y:674},
+  {x:2799, y:818},
+  {x:2822, y:860},
+  {x:2776, y:890},
+  {x:2725, y:777},
+  {x:2769, y:961},
+  {x:2687, y:1099},
+  {x:2770, y:1152},
+  {x:2410, y:1020},
+  {x:2752, y:1226},
+  {x:2551, y:1253},
+  {x:2315, y:1196},
+  {x:2362, y:1106},
+  {x:2236, y:1240},
+  {x:2529, y:1395},
+  {x:2481, y:1433},
+  {x:2623, y:1424},
+  {x:2319, y:1477},
+  {x:2033, y:1486},
+  {x:1865, y:1591},
+  {x:1839, y:1482},
+  {x:1991, y:1562},
+  {x:1821, y:1310},
+  {x:1657, y:1326},
+  {x:1657, y:1306},
+  {x:1657, y:1285},
+  {x:1657, y:1264},
+  {x:1657, y:1242},
+  {x:1657, y:1221},
+  {x:1656, y:1200},
+  {x:1521, y:1327},
+  {x:1161, y:2272},
+  {x:974, y:2315},
+  {x:1108, y:2313},
+  {x:931, y:2415},
+  {x:966, y:2397},
+  {x:998, y:2409},
+  {x:1011, y:2381},
+  {x:1054, y:2401},
+  {x:1061, y:2367},
+  {x:1108, y:2398},
+  {x:1110, y:2353},
+  {x:1084, y:2378},
+  {x:1077, y:2451},
+  {x:968, y:2436},
+  {x:1023, y:2428},
+  {x:1521, y:1308},
+  {x:1521, y:1289},
+  {x:1545, y:1201},
+  {x:1545, y:1221},
+  {x:1545, y:1240},
+  {x:1393, y:1227},
+  {x:1455, y:1202},
+  {x:1277, y:1324},
+  {x:1277, y:1305},
+  {x:1276, y:1287},
+  {x:1415, y:1044},
+  {x:1416, y:1070},
+  {x:1417, y:1096},
+  {x:1196, y:1199},
+  {x:1197, y:1222},
+  {x:1197, y:1249},
+  {x:1049, y:1315},
+  {x:623, y:1835},
+  {x:642, y:1835},
+  {x:663, y:1835},
+  {x:685, y:1835},
+  {x:706, y:1836},
+  {x:727, y:1836},
+  {x:747, y:1835},
+  {x:768, y:1835},
+  {x:821, y:747},
+  {x:841, y:747},
+  {x:729, y:958},
+  {x:880, y:992},
+  {x:1038, y:843},
+  {x:1038, y:823},
+  {x:1302, y:565},
+  {x:1772, y:415},
+  {x:2799, y:324},
+  {x:2588, y:258},
+  {x:2634, y:512},
+  {x:2369, y:599},
+  {x:2449, y:482},
+  {x:2483, y:512},
+  {x:2401, y:539},
+  {x:2560, y:589},
+  {x:2558, y:562},
+  {x:2565, y:730},
+  {x:2622, y:788},
+  {x:2623, y:1106},
+  {x:2563, y:1164},
+  {x:1638, y:947},
+  {x:1648, y:966},
+  {x:1416, y:1021},
+  {x:231, y:1008},
+  {x:252, y:985},
+  {x:253, y:959},
+  {x:202, y:1037},
+  {x:255, y:537},
+  {x:262, y:586},
+  {x:270, y:561},
+  {x:1017, y:485},
+  {x:1043, y:471},
+  {x:1585, y:1699},
+  {x:1519, y:1738},
+  {x:522, y:1957},
+  {x:387, y:1871},
+  {x:861, y:829},
+  {x:861, y:849},
+  {x:841, y:769},
+  {x:841, y:790},
+  {x:841, y:810},
+  {x:841, y:830},
+  {x:841, y:849},
+  {x:821, y:769},
+  {x:821, y:790},
+  {x:821, y:810},
+  {x:821, y:830},
+  {x:821, y:849},
+  {x:801, y:769},
+  {x:801, y:790},
+  {x:781, y:769},
+  {x:801, y:810},
+  {x:781, y:789},
+  {x:782, y:808},
+  {x:801, y:830},
+  {x:781, y:830},
+  {x:801, y:849},
+  {x:781, y:849},
+  {x:1305, y:776},
+  {x:1324, y:776},
+  {x:1343, y:776},
+  {x:879, y:1635},
+  {x:726, y:1459},
+  {x:752, y:1459},
+  {x:778, y:1459},
+  {x:1822, y:1331},
+  {x:1822, y:1351},
+  {x:1843, y:1354},
+  {x:1843, y:1332},
+  {x:1843, y:1311},
+  {x:1800, y:1311},
+  {x:1802, y:1332},
+  {x:1802, y:1352},
+  {x:1678, y:1242},
+  {x:1678, y:1222},
+  {x:1677, y:1264},
+  {x:1698, y:1264},
+  {x:1699, y:1243},
+  {x:1677, y:1284},
+  {x:1699, y:1285},
+  {x:1722, y:1244},
+  {x:1721, y:1265},
+  {x:1745, y:1244},
+  {x:1633, y:1263},
+  {x:1634, y:1242},
+  {x:1635, y:1222},
+  {x:1613, y:1242},
+  {x:1613, y:1221},
+  {x:1590, y:1221},
+  {x:1636, y:1200},
+  {x:1634, y:1307},
+  {x:1634, y:1328},
+  {x:1614, y:1328},
+  {x:1362, y:1286},
+  {x:1362, y:1306},
+  {x:1362, y:1326},
+  {x:1341, y:1326},
+  {x:1382, y:1306},
+  {x:1382, y:1326},
+  {x:1402, y:1326},
+  {x:1196, y:1271},
+  {x:1216, y:1222},
+  {x:1215, y:1249},
+  {x:1216, y:1272},
+  {x:1256, y:1305},
+  {x:1298, y:1305},
+  {x:1299, y:1325},
+  {x:1256, y:1325},
+  {x:1955, y:1388},
+  {x:1934, y:1389},
+  {x:2008, y:1387},
+  {x:2032, y:1386},
+  {x:2055, y:1386},
+  {x:2080, y:1386},
+  {x:1906, y:1357},
+  {x:1885, y:1356},
+  {x:1870, y:1454},
+  {x:1840, y:1409},
+  {x:1841, y:1431},
+  {x:2006, y:1487},
+  {x:2094, y:1511},
+  {x:2137, y:1513},
+  {x:1779, y:1312},
+  {x:1755, y:1313},
+  {x:1800, y:1286},
+  {x:1778, y:1288},
+  {x:2178, y:1383},
+  {x:2213, y:1344},
+  {x:2140, y:1343},
+  {x:2319, y:1292},
+  {x:2499, y:1346},
+  {x:2499, y:1383},
+  {x:2609, y:1385},
+  {x:2584, y:1385},
+  {x:2590, y:1407},
+  {x:2515, y:1449},
+  {x:2506, y:1415},
+  {x:2438, y:1415},
+  {x:2472, y:1402},
+  {x:2461, y:1462},
+  {x:2764, y:1079},
+  {x:2787, y:1108},
+  {x:2431, y:1062},
+  {x:2412, y:1083},
+  {x:2390, y:1062},
+  {x:2388, y:1102},
+  {x:2347, y:973},
+  {x:2371, y:991},
+  {x:2439, y:1001},
+  {x:2445, y:910},
+  {x:2511, y:1005},
+  {x:2534, y:1038},
+  {x:2511, y:1062},
+  {x:2520, y:1104},
+  {x:2659, y:1104},
+  {x:2683, y:1124},
+  {x:2692, y:1154},
+  {x:2677, y:998},
+  {x:2728, y:995},
+  {x:2706, y:979},
+  {x:2515, y:910},
+  {x:2443, y:723},
+  {x:2383, y:672},
+];
+
+const animatedObjectsMap = [
+  // Ejemplo: sprite sheet de 4 frames (64/4 = 16 por frame).
+  // Si tu imagen mide 120px de ancho y son 4 frames, usa sw:120 => 30px por frame.
+  {x:1858, y:829, sprite:"Img/Vaca.png", sw:256, sh:32, frames:8, hw:20, hh:16, speed:20},
+  {x:2196, y:926, sprite:"Img/Vaca.png", sw:256, sh:32, frames:8, hw:20, hh:16, speed:25},
+  {x:1715, y:925, sprite:"Img/Vaca.png", sw:256, sh:32, frames:8, hw:20, hh:16, speed:30},
+  {x:1176, y:239, sprite:"Img/Vaca.png", sw:256, sh:32, frames:8, hw:20, hh:16, speed:23},
+  {x:2410, y:774, sprite:"Img/Vaca.png", sw:256, sh:32, frames:8, hw:20, hh:16, speed:32},
+  {x:695, y:716, sprite:"Img/Vaca.png", sw:256, sh:32, frames:8, hw:20, hh:16, speed:42},
+  {x:173, y:785, sprite:"Img/Vaca.png", sw:256, sh:32, frames:8, hw:20, hh:16, speed:35},
+  {x:763, y:777, sprite:"Img/Vaca.png", sw:256, sh:32, frames:8, hw:20, hh:16, speed:21},
+  {x:909, y:1076, sprite:"Img/Vaca.png", sw:256, sh:32, frames:8, hw:20, hh:16, speed:25},
+  {x:743, y:1655, sprite:"Img/Vaca.png", sw:256, sh:32, frames:8, hw:20, hh:16, speed:20},
+
+  {x:882, y:565, sprite:"Img/fuego.png", sw:256, sh:32, frames:8, hw:28, hh:12, speed:10},
+  {x:646, y:388, sprite:"Img/fuego.png", sw:256, sh:32, frames:8, hw:28, hh:12, speed:10},
+  {x:1451, y:1308, sprite:"Img/fuego.png", sw:256, sh:32, frames:8, hw:28, hh:12, speed:10},
+  {x:578, y:1697, sprite:"Img/fuego.png", sw:256, sh:32, frames:8, hw:28, hh:12, speed:10},
+  {x:891, y:1685, sprite:"Img/fuego.png", sw:256, sh:32, frames:8, hw:28, hh:12, speed:10},
+  {x:935, y:1965, sprite:"Img/fuego.png", sw:256, sh:32, frames:8, hw:28, hh:12, speed:10},
+  {x:1666, y:2413, sprite:"Img/fuego.png", sw:256, sh:32, frames:8, hw:28, hh:12, speed:10},
+  {x:1467, y:2034, sprite:"Img/fuego.png", sw:256, sh:32, frames:8, hw:28, hh:12, speed:10},
+  {x:2025, y:2801, sprite:"Img/fuego.png", sw:256, sh:32, frames:8, hw:28, hh:12, speed:10},
+  {x:1874, y:1755, sprite:"Img/fuego.png", sw:256, sh:32, frames:8, hw:28, hh:12, speed:10},
+  {x:2077, y:1755, sprite:"Img/fuego.png", sw:256, sh:32, frames:8, hw:28, hh:12, speed:10},
+  {x:535, y:880, sprite:"Img/fuego.png", sw:256, sh:32, frames:8, hw:28, hh:12, speed:10},
+
+  {x:2167, y:725, sprite:"Img/gallina.png", sw:128, sh:16, frames:8, hw:15, hh:12, speed:9},
+  {x:2000, y:684, sprite:"Img/gallina2.png", sw:128, sh:16, frames:8, hw:15, hh:12, speed:17},
+  {x:2033, y:710, sprite:"Img/gallina.png", sw:128, sh:16, frames:8, hw:15, hh:12, speed:15},
+  {x:1695, y:765, sprite:"Img/gallina2.png", sw:128, sh:16, frames:8, hw:15, hh:12, speed:8},
+  {x:1250, y:935, sprite:"Img/gallina.png", sw:128, sh:16, frames:8, hw:15, hh:12, speed:10},
+  {x:1087, y:929, sprite:"Img/gallina2.png", sw:128, sh:16, frames:8, hw:15, hh:12, speed:16},
+  {x:1255, y:224, sprite:"Img/gallina.png", sw:128, sh:16, frames:8, hw:15, hh:12, speed:17},
+  {x:1285, y:87, sprite:"Img/gallina2.png", sw:128, sh:16, frames:8, hw:15, hh:12, speed:15},
+  {x:1323, y:321, sprite:"Img/gallina.png", sw:128, sh:16, frames:8, hw:15, hh:12, speed:12},
+  {x:1320, y:402, sprite:"Img/gallina2.png", sw:128, sh:16, frames:8, hw:15, hh:12, speed:14},
+  {x:1252, y:472, sprite:"Img/gallina.png", sw:128, sh:16, frames:8, hw:15, hh:12, speed:13},
+  {x:1240, y:284, sprite:"Img/gallina2.png", sw:128, sh:16, frames:8, hw:15, hh:12, speed:9},
+  {x:1123, y:335, sprite:"Img/gallina.png", sw:128, sh:16, frames:8, hw:15, hh:12, speed:18},
+  {x:870, y:396, sprite:"Img/gallina2.png", sw:128, sh:16, frames:8, hw:15, hh:12, speed:11},
+
+   {x:1131, y:819, sprite:"Img/girasol.png", sw:128, sh:32, frames:8, hw:8, hh:8, speed:11},
+  {x:1177, y:818, sprite:"Img/girasol.png", sw:128, sh:32, frames:8, hw:8, hh:8, speed:11},
+  {x:1223, y:818, sprite:"Img/girasol.png", sw:128, sh:32, frames:8, hw:8, hh:8, speed:11},
+  {x:904, y:776, sprite:"Img/girasol.png", sw:128, sh:32, frames:8, hw:8, hh:8, speed:11},
+  {x:922, y:615, sprite:"Img/girasol.png", sw:128, sh:32, frames:8, hw:8, hh:8, speed:11},
+  {x:414, y:265, sprite:"Img/girasol.png", sw:128, sh:32, frames:8, hw:8, hh:8, speed:11},
+  {x:1034, y:240, sprite:"Img/girasol.png", sw:128, sh:32, frames:8, hw:8, hh:8, speed:11},
+  {x:979, y:386, sprite:"Img/girasol.png", sw:128, sh:32, frames:8, hw:8, hh:8, speed:11},
+  {x:921, y:529, sprite:"Img/girasol.png", sw:128, sh:32, frames:8, hw:8, hh:8, speed:11},
+  {x:843, y:905, sprite:"Img/girasol.png", sw:128, sh:32, frames:8, hw:8, hh:8, speed:11},
+  {x:866, y:904, sprite:"Img/girasol.png", sw:128, sh:32, frames:8, hw:8, hh:8, speed:11},
+  {x:772, y:1082, sprite:"Img/girasol.png", sw:128, sh:32, frames:8, hw:8, hh:8, speed:11},
+  {x:301, y:948, sprite:"Img/girasol.png", sw:128, sh:32, frames:8, hw:8, hh:8, speed:11},
+  {x:324, y:949, sprite:"Img/girasol.png", sw:128, sh:32, frames:8, hw:8, hh:8, speed:11},
+  {x:244, y:892, sprite:"Img/girasol.png", sw:128, sh:32, frames:8, hw:8, hh:8, speed:11},
+  {x:195, y:1266, sprite:"Img/girasol.png", sw:128, sh:32, frames:8, hw:8, hh:8, speed:11},
+
+];
+const bushesEntities = [];
+const animatedObjectsEntities = [];
+
+coinsMap.forEach(c=>{
+  const coin = document.createElement("div");
+  coin.className = "entity coin";
+  coin.style.left = c.x + "px";
+  coin.style.top  = c.y + "px";
+
+  const sprite = document.createElement("div");
+  sprite.className = "coinSprite";
+
+  coin.appendChild(sprite);
+  world.appendChild(coin);
+
+  coinsEntities.push({
+    x: c.x,
+    y: c.y,
+    el: coin,
+    sprite: sprite,
+    frame: 0,
+    timer: 0,
+    collected: false
+  });
+});
+
+payBlocksMap.forEach(b=>{
+  const block = document.createElement("div");
+  block.className = "entity payBlock";
+  block.style.left = b.x + "px";
+  block.style.top  = b.y + "px";
+
+  if(b.sprite){
+    const img = document.createElement("img");
+    img.src = b.sprite;
+    img.width = b.sw ?? 24;
+    img.height = b.sh ?? 24;
+    block.appendChild(img);
+  }
+  world.appendChild(block);
+
+  payBlocksEntities.push({
+    x: b.x,
+    y: b.y,
+    hw: b.hw ?? 24,
+    hh: b.hh ?? 20,
+    price: b.price ?? 1,
+    el: block,
+    unlocked: false,
+    msgCooldown: 0
+  });
+
+  entities.push({ el: block, y: b.y });
+});
+bushesMap.forEach(b=>{
+  const bush = document.createElement("div");
+  bush.className = "entity bush";
+  bush.style.left = b.x + "px";
+  bush.style.top  = b.y + "px";
+
+  const sprite = document.createElement("div");
+  sprite.className = "bushSprite";
+
+  bush.appendChild(sprite);
+  world.appendChild(bush);
+
+  bushesEntities.push({
+    x: b.x,
+    y: b.y,
+    hw: 24,
+    hh: 20,
+    el: bush,
+    sprite,
+    frame: 0,
+    timer: 0
+  });
+  entities.push({ el: bush, y: b.y });
+});
+
+animatedObjectsMap.forEach(o=>{
+  const objectEl = document.createElement("div");
+  objectEl.className = "entity spriteObject";
+  objectEl.style.left = o.x + "px";
+  objectEl.style.top  = o.y + "px";
+
+  const frameW = Math.floor(o.sw / o.frames);
+  objectEl.style.width = frameW + "px";
+  objectEl.style.height = o.sh + "px";
+
+  const sprite = document.createElement("div");
+  sprite.className = "spriteObjectSprite";
+  sprite.style.width = o.sw + "px";
+  sprite.style.height = o.sh + "px";
+  sprite.style.backgroundImage = `url("${o.sprite}")`;
+
+  objectEl.appendChild(sprite);
+  world.appendChild(objectEl);
+
+  animatedObjectsEntities.push({
+    x: o.x,
+    y: o.y,
+    hw: o.hw ?? frameW,
+    hh: o.hh ?? o.sh,
+    el: objectEl,
+    sprite,
+    frame: 0,
+    timer: 0,
+    frames: o.frames,
+    frameW,
+    speed: o.speed ?? 12
+  });
+
+  entities.push({ el: objectEl, y: o.y });
+});
+
+function distance(a, b){
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+
+function checkCoinPickup(){
+  function spendCoins(amount){
+  if(coins < amount) return false;
+  coins -= amount;
+  updateHUD();
+  return true;
+}
+
+coinsEntities.forEach(c=>{
+    if(c.collected) return;
+
+    const dx = Math.abs(playerPos.x - c.x);
+    const dy = Math.abs(playerPos.y - c.y);
+
+    if(dx < 16 && dy < 16){
+      c.collected = true;
+      c.el.remove();
+      addCoins(1); // suma 1 moneda
+    }
+  });
+}
+
+function spendCoins(amount){
+  if(coins < amount) return false;
+  coins -= amount;
+  updateHUD();
+  return true;
+}
+
+coinsEntities.forEach(c=>{
+  entities.push({ el:c.el, y:c.y });
+});
+
+
+/* crear objetos visuales */
+objects.forEach(o=>{
+  const div = document.createElement("div");
+  div.className = "entity object";
+
+  const img = document.createElement("img");
+  img.src = o.sprite;
+  img.width = o.sw;
+  img.height = o.sh;
+
+  const hit = document.createElement("div");
+  hit.className = "hitbox";
+  hit.style.width = o.hw+"px";
+  hit.style.height = o.hh+"px";
+
+  div.appendChild(img);
+  div.appendChild(hit);
+  world.appendChild(div);
+
+  o.el = div;
+  o.hit = hit;
+  entities.push(o);
+});
+
+function lookAtPlayer(npc){
+  const dx = playerPos.x - npc.x;
+  const dy = playerPos.y - npc.y;
+
+  if(Math.abs(dx) > Math.abs(dy)){
+    npc.dir = dx > 0 ? 2 : 1; // derecha : izquierda
+  }else{
+    npc.dir = dy > 0 ? 0 : 3; // abajo : arriba
+  }
+
+  npc.frame = 0;
+}
+
+
+entities.push({ el:player, isPlayer:true });
+
+const keys = {};
+window.addEventListener("keydown",e=>{
+  if(gameOver) return;
+  if(talking) return;
+  keys[e.key]=true;
+});
+window.addEventListener("keyup",e=>keys[e.key]=false);
+
+/* COLISIÓN SOLO CON LA BASE */
+function collide(nx, ny, self = null){
+  const pL = nx - 12;
+  const pR = nx + 12;
+  const pT = ny - 12;
+  const pB = ny;
+
+  // 🔹 Colisión con objetos
+  for(const o of objects){
+    const oL = o.x - o.hw / 2;
+    const oR = o.x + o.hw / 2;
+    const oT = o.y - o.hh;
+    const oB = o.y;
+
+    if(pR > oL && pL < oR && pB > oT && pT < oB){
+      return true;
+    }
+  }
+
+  // Colision con bloques de pago
+  for(const block of payBlocksEntities){
+    if(block.unlocked) continue;
+
+    const bL = block.x - block.hw / 2;
+    const bR = block.x + block.hw / 2;
+    const bT = block.y - block.hh;
+    const bB = block.y;
+
+    if(pR > bL && pL < bR && pB > bT && pT < bB){
+      if(self !== null){
+        return true;
+      }
+
+      if(spendCoins(block.price)){
+        block.unlocked = true;
+        block.el.remove();
+        return false;
+      }
+
+      if(block.msgCooldown === 0 && !talking){
+        openDialog(`Necesitas ${block.price} monedas para pasar.`);
+        block.msgCooldown = 90;
+      }
+      return true;
+    }
+  }
+  // Colision con NPCs
+  for(const bush of bushesEntities){
+    const bL = bush.x - bush.hw / 2;
+    const bR = bush.x + bush.hw / 2;
+    const bT = bush.y - bush.hh;
+    const bB = bush.y;
+
+    if(pR > bL && pL < bR && pB > bT && pT < bB){
+      if(self === null && jumping){
+        continue;
+      }
+      return true;
+    }
+  }
+
+  // Colision con objetos animados
+  for(const obj of animatedObjectsEntities){
+    const oL = obj.x - obj.hw / 2;
+    const oR = obj.x + obj.hw / 2;
+    const oT = obj.y - obj.hh;
+    const oB = obj.y;
+
+    if(pR > oL && pL < oR && pB > oT && pT < oB){
+      return true;
+    }
+  }
+
+  // Colision con NPCs
+  for(const npc of npcs){
+    if(npc === self) continue;
+
+    const nL = npc.x - npc.hw / 2;
+    const nR = npc.x + npc.hw / 2;
+    const nT = npc.y - npc.hh;
+    const nB = npc.y;
+
+    if(pR > nL && pL < nR && pB > nT && pT < nB){
+      return true;
+    }
+  }
+
+  // 🔹 Colisión con enemigos
+  for(const enemy of enemies){
+    if(enemy === self) continue;
+
+    const eL = enemy.x - enemy.hw / 2;
+    const eR = enemy.x + enemy.hw / 2;
+    const eT = enemy.y - enemy.hh;
+    const eB = enemy.y;
+
+    if(pR > eL && pL < eR && pB > eT && pT < eB){
+      return true;
+    }
+  }
+
+  return false;
+}
+
+const sprite = document.getElementById("playerSprite");
+
+let frame = 1;
+let frameTimer = 0;
+let direction = 0; 
+// 0 abajo, 1 izquierda, 2 derecha, 3 arriba
+let moving = false;
+let jumping = false;
+let jumpTimer = 0;
+const jumpDuration = 18; // frames
+const jumpScale = 0.1; // intensidad del "salto"
+let hurtTimer = 0;
+const hurtDuration = 16;
+let playerHitCooldown = 0;
+let knockbackTimer = 0;
+let knockbackVX = 0;
+let knockbackVY = 0;
+const knockbackDuration = 10;
+const knockbackStrength = 3.2;
+
+const npcs = [];
+const enemies = [];
+
+const musicTracks = {
+  ruta: "musica/Ruta1(Instrumentales).wav",
+  pueblo: "musica/Pueblo.mp3",
+  enemigos: "musica/Enemigos.mpeg",
+  cementerio: "musica/Malvada.mp3",
+};
+
+// Zonas editables de musica por rectangulo (x centro, y base, hw ancho, hh alto)
+const musicZones = [
+  {x:686, y:440, hw:1358, hh:426, track:"pueblo"},
+  {x:965, y:785, hw:164, hh:368, track:"pueblo"},
+  {x:1139, y:555, hw:226, hh:140, track:"pueblo"},
+  {x:1274, y:497, hw:85, hh:76, track:"pueblo"},
+  {x:824, y:698, hw:135, hh:275, track:"pueblo"},
+  {x:244, y:843, hw:457, hh:409, track:"pueblo"},
+  {x:611, y:728, hw:303, hh:317, track:"pueblo"},
+  {x:402, y:1015, hw:136, hh:226, track:"pueblo"},
+  {x:308, y:955, hw:72, hh:131, track:"pueblo"},
+  {x:251, y:898, hw:70, hh:104, track:"pueblo"},
+
+  {x:1480, y:2880, hw:2795, hh:1087, track:"cementerio"},
+  {x:1213, y:1530, hw:286, hh:116, track:"cementerio"},
+  {x:1491, y:1880, hw:576, hh:422, track:"cementerio"},
+];
+
+// Zonas editables de neblina (x centro, y base, hw ancho, hh alto)
+// Puedes agregar nuevas zonas con addFogZone(...)
+const fogZones = [
+  {x:1440, y:2880, hw:2880, hh:1075},
+];
+
+let fogVisible = false;
+
+function addFogZone(zone){
+  fogZones.push(zone);
+  rebuildFog();
+}
+
+function rebuildFog(){
+  fogLayer.innerHTML = "";
+
+  const fogCount = 2;
+  const duration = 70;
+
+  for(let i = 0; i < fogCount; i++){
+    const fog = document.createElement("div");
+    fog.className = "fog";
+    fog.style.left = "100%";
+    fog.style.top = "50%";
+
+    fog.style.setProperty("--fog-scale", 1);
+    fog.style.animationDuration = duration + "s";
+    fog.style.animationDelay = (-i * duration /2) + "s";
+
+    fogLayer.appendChild(fog);
+  }
+}
+
+function isInsideZone(zone, point){
+  const left = zone.x - zone.hw / 2;
+  const right = zone.x + zone.hw / 2;
+  const top = zone.y - zone.hh;
+  const bottom = zone.y;
+  return (
+    point.x >= left && point.x <= right &&
+    point.y >= top && point.y <= bottom
+  );
+}
+
+function isInFogZone(){
+  return fogZones.some(zone=>isInsideZone(zone, playerPos));
+}
+
+function setFogVisible(visible){
+  if(visible === fogVisible) return;
+  fogVisible = visible;
+  fogLayer.classList.toggle("active", fogVisible);
+}
+
+rebuildFog();
+
+const zoneMusic = Object.fromEntries(
+  Object.entries(musicTracks).map(([name, src])=>[name, new Audio(src)])
+);
+
+Object.values(zoneMusic).forEach(track=>{
+  track.loop = true;
+  track.preload = "auto";
+});
+
+if(zoneMusic.pueblo){
+  zoneMusic.pueblo.addEventListener("error", ()=>{
+    zoneMusic.pueblo.src = musicTracks.ruta;
+    zoneMusic.pueblo.load();
+  });
+}
+
+if(zoneMusic.enemigos){
+  zoneMusic.enemigos.addEventListener("error", ()=>{
+    zoneMusic.enemigos.src = musicTracks.ruta;
+    zoneMusic.enemigos.load();
+  });
+}
+
+let musicUnlocked = false;
+let currentZone = "";
+const MUSIC_MAX_VOLUME = 0.30;
+const MUSIC_FADE_STEP = 0.01;
+const musicTargets = Object.fromEntries(
+  Object.keys(zoneMusic).map(name=>[name, 0])
+);
+
+function detectZone(){
+  const inEnemyZone = enemies.some(enemy=>distance(playerPos, enemy) < 220);
+
+  if(inEnemyZone) return "enemigos";
+
+  for(const zone of musicZones){
+    const left = zone.x - zone.hw / 2;
+    const right = zone.x + zone.hw / 2;
+    const top = zone.y - zone.hh;
+    const bottom = zone.y;
+    if(
+      playerPos.x >= left && playerPos.x <= right &&
+      playerPos.y >= top && playerPos.y <= bottom
+    ){
+      return zoneMusic[zone.track] ? zone.track : "ruta";
+    }
+  }
+
+  return "ruta";
+}
+
+function playZoneMusic(zone){
+  if(zone === currentZone || !musicUnlocked) return;
+  currentZone = zone;
+
+  Object.keys(musicTargets).forEach(name=>{
+    musicTargets[name] = name === zone ? MUSIC_MAX_VOLUME : 0;
+  });
+}
+
+function updateMusicFade(){
+  if(!musicUnlocked) return;
+
+  Object.entries(zoneMusic).forEach(([name, track])=>{
+    const target = musicTargets[name] ?? 0;
+    const diff = target - track.volume;
+
+    if(Math.abs(diff) <= MUSIC_FADE_STEP){
+      track.volume = target;
+    }else{
+      track.volume += Math.sign(diff) * MUSIC_FADE_STEP;
+    }
+
+    if(target > 0 && track.paused){
+      track.play().catch(()=>{});
+    }
+
+    if(target === 0 && track.volume <= 0.001 && !track.paused){
+      track.pause();
+    }
+  });
+}
+
+function unlockMusic(){
+  if(musicUnlocked) return;
+  musicUnlocked = true;
+  Object.values(zoneMusic).forEach(track=>{
+    track.volume = 0;
+  });
+  playZoneMusic(detectZone());
+}
+
+window.addEventListener("keydown", unlockMusic, { once: true });
+window.addEventListener("pointerdown", unlockMusic, { once: true });
+
+function createNPC(data){
+
+  const npc = document.createElement("div");
+  npc.className = "entity npc";
+  npc.style.left = data.x + "px";
+  npc.style.top  = data.y + "px";
+
+  const sprite = document.createElement("div");
+  sprite.className = "npcSprite";
+  sprite.style.backgroundImage = `url(${data.sprite})`;
+
+  if(data.single){
+    const sw = data.sw ?? 32;
+    const sh = data.sh ?? 32;
+    const frames = data.animFrames ?? 1;
+    sprite.style.width = sw + "px";
+    sprite.style.height = sh + "px";
+    if(frames > 1){
+      sprite.style.backgroundSize = (sw * frames) + "px " + sh + "px";
+    }else{
+      sprite.style.backgroundSize = "100% 100%";
+    }
+    npc.style.width = sw + "px";
+    npc.style.height = sh + "px";
+  }
+
+  npc.appendChild(sprite);
+  world.appendChild(npc);
+
+  const entityRef = { el: npc, y: data.y };
+  entities.push(entityRef);
+
+
+  const npcData = {
+    el: npc,
+    sprite,
+    x: data.x,
+    y: data.y,
+    dir: 0,
+    frame: 0,
+    timer: 0,
+    hw: data.hw ?? NPC_HITBOX.w,
+    hh: data.hh ?? NPC_HITBOX.h,
+    text: data.text,
+    walkTimer: 0,
+    walking: false,
+    static: true,
+    single: !!data.single,
+    sw: data.sw ?? 32,
+    sh: data.sh ?? 32,
+    animFrames: data.animFrames ?? 1,
+    animSpeed: data.animSpeed ?? 12,
+    entityRef,
+    shop: data.shop ?? null
+  };
+
+
+  npcs.push(npcData);
+}
+
+function createEnemy(data){
+  const enemy = document.createElement("div");
+  enemy.className = "entity enemy";
+  enemy.style.left = data.x + "px";
+  enemy.style.top  = data.y + "px";
+
+  const sprite = document.createElement("div");
+  sprite.className = "enemySprite";
+  sprite.style.backgroundImage = `url(${data.sprite})`;
+
+  enemy.appendChild(sprite);
+  world.appendChild(enemy);
+
+  const entityRef = { el: enemy, y: data.y };
+  entities.push(entityRef);
+
+  const enemyData = {
+    el: enemy,
+    sprite,
+    x: data.x,
+    y: data.y,
+    dir: 0,
+    frame: 0,
+    timer: 0,
+    hw: 0,
+    hh: 0,
+    walkTimer: 0,
+    walking: true,
+    entityRef,
+    attackCooldown: 0,
+    jumping: false,
+    jumpTimer: 0,
+    jumpWait: 60 + Math.random()*120
+  };
+
+  enemies.push(enemyData);
+}
+// NPC estático con 4 frames (tira horizontal)
+createNPC({x:471, y:647, sprite: "Img/Npc/Npc2.png", text: "Vaya... no eres de aquí, ¿verdad? Se nota en la forma en que miras todo. Hace años que no veía a alguien como tú... y sinceramente, eran tiempos más bonitos.", static: true, single: true, sw: 26, sh: 32, animFrames: 4, animSpeed: 25, hw: 20, hh: 20});
+createNPC({x:2750, y:417, sprite: "Img/Npc/Npc11.png", text: "No pareces de por aquí… aunque, curiosamente, eso fue lo que pensé la primera vez que te vi. Soy el agricultor. Es más sencillo así. La gente necesita etiquetas simples para cosas que no comprenden. Mi casa está alejada del pueblo porque… hay cosas que crecen mejor cuando no hay ojos sobre ellas. Cosas que no soportan la cercanía de muchas voces… ni de recuerdos ajenos. Antes no estaba tan lejos. Antes… el pueblo estaba más cerca. Ten cuidado. No es que la gente no confíe en los de tu tipo… es que reconocen algo. Algo que tú aún no has notado… pero ellos sí. Y cuando lo hagan… dejarán de mirarte como a un extraño. Créeme… no será la última vez que nos crucemos. Porque cuando este lugar decide que ya te ha visto suficiente… comienza a asegurarse de que no puedas dejar de verlo.", static: true, single: true, sw: 36, sh: 31, animFrames: 5, animSpeed: 25, hw: 20, hh: 20});
+createNPC({x:2349, y:773, sprite: "Img/Letrero.png", text: "bienvenido al llano castellano.", static: true, single: true, sw: 16, sh: 16, animFrames: 1, animSpeed: 15, hw: 12, hh: 7});
+createNPC({x:850, y:1462, sprite: "Img/Npc/Npc10.png", text: "Suelo vender corazones a 3 monedas... pero para alguien como tú... serán 5. Riesgos del negocio, ya sabes.", static: true, single: true, sw: 32, sh: 35, animFrames: 5, animSpeed: 15, hw: 19, hh: 14, shop: { type: "heart", price: 5 }});
+createNPC({x:959, y:834, sprite: "Img/Npc/Npc8.png", text: "Aquí no entra cualquiera. Y mucho menos alguien que huele a sal y mar. Si quieres pasar... serán 30 monedas.", static: true, single: true, sw: 40, sh: 38, animFrames: 4, animSpeed: 15, hw: 20, hh: 14});
+createNPC({x:1143, y:291, sprite: "Img/Npc/Npc9.png", text: "Por eso esperaba con la carita empapada. ¿Qué miras? Al menos yo tengo talento... tú solo traes ese olor a océano contigo.", static: true, single: true, sw: 20, sh: 33, animFrames: 6, animSpeed: 15, hw: 20, hh: 14});
+createNPC({x:351, y:628, sprite: "Img/Npc/Npc7.png", text: "La literatura es magnífica... claro, no esperaría que alguien como tú lo entienda. Se nota que vienes de un lugar donde eso no importa.", static: true, single: true, sw: 28, sh: 31, animFrames: 5, animSpeed: 35, hw: 20, hh: 14});
+createNPC({x:1793, y:232, sprite: "Img/Npc/Npc6.png", text: "Subir hasta aquí fue difícil... pero soportar tu presencia lo es aún más. ¿No tienes otro sitio al que ir?", static: true, single: true, sw: 28, sh: 33, animFrames: 5, animSpeed: 35, hw: 20, hh: 14});
+createNPC({x:1912, y:1126, sprite: "Img/Npc/Npc13.png", text: "En el bosque se escuchan voces...VOCES...voces...perdidos...estamos PERDIDOS...JAJAJA...monedas...MONEDAS...170...¡No soy real! No...", static: true, single: true, sw: 23, sh: 31, animFrames: 5, animSpeed: 35, hw: 20, hh: 14});
+createNPC({x:386, y:417, sprite: "Img/Npc/Npc3.png", text: "Una buena cerveza fria y una buena mujer es todo lo que necesito...espero que no hayas llegado para robar nuestros empleos.", static: true, single: true, sw: 30, sh: 32, animFrames: 4, animSpeed: 20, hw: 20, hh: 14});
+createNPC({x:150, y:286, sprite: "Img/Npc/Npc4.png", text: "Estoy pensando en abrir una cafetería... un lugar limpio, tranquilo... y sin criaturas como tú merodeando cerca.", static: true, single: true, sw: 23, sh: 32, animFrames: 5, animSpeed: 20, hw: 20, hh: 14});
+createNPC({x:489, y:1309, sprite: "Img/Npc/Npc5.png", text: "Soy el alcalde de este pueblo. Aquí mantenemos el orden. No esperaba ver a alguien como tú cruzar nuestras fronteras. Vigilo todo... y si causas problemas, desaparecerás como la bruja... ESFUMATE.", static: true, single: true, sw: 33, sh: 33, animFrames: 4, animSpeed: 30, hw: 20, hh: 14});
+createNPC({x:445, y:1410, sprite: "Img/Npc/Npc8.png", text: "¿Qué miras? Nunca habías visto gente de verdad, ¿o qué?", static: true, single: true, sw: 40, sh: 38, animFrames: 4, animSpeed: 15, hw: 20, hh: 14});
+createNPC({x:531, y:1410, sprite: "Img/Npc/Npc8.png", text: "... No me gusta cómo nos observa.", static: true, single: true, sw: 40, sh: 38, animFrames: 4, animSpeed: 15, hw: 20, hh: 14});
+createNPC({x:423, y:1046, sprite: "Img/Npc/Npc8.png", text: "No nos distraigas... bastante tenemos con lo nuestro.", static: true, single: true, sw: 40, sh: 38, animFrames: 4, animSpeed: 15, hw: 20, hh: 14});
+createNPC({x:480, y:1046, sprite: "Img/Npc/Npc8.png", text: "1, 2, 3, 4... mantén el ritmo. Ignora al forastero.", static: true, single: true, sw: 40, sh: 38, animFrames: 4, animSpeed: 15, hw: 20, hh: 14});
+createNPC({x:369, y:1046, sprite: "Img/Npc/Npc8.png", text: "¿Tu...tienes dos penes? que rico.", static: true, single: true, sw: 40, sh: 38, animFrames: 4, animSpeed: 15, hw: 20, hh: 14});
+createNPC({x:529, y:1046, sprite: "Img/Npc/Npc8.png", text: "Voy a hacer como que no escuche eso.", static: true, single: true, sw: 40, sh: 38, animFrames: 4, animSpeed: 15, hw: 20, hh: 14});
+createNPC({x:529, y:1088, sprite: "Img/Npc/Npc8.png", text: "Nos entrenaron para defender este lugar... incluso de cosas como tú.", static: true, single: true, sw: 40, sh: 38, animFrames: 4, animSpeed: 15, hw: 20, hh: 14});
+createNPC({x:480, y:1088, sprite: "Img/Npc/Npc8.png", text: "Apestas a concha marina.", static: true, single: true, sw: 40, sh: 38, animFrames: 4, animSpeed: 15, hw: 20, hh: 14});
+createNPC({x:423, y:1088, sprite: "Img/Npc/Npc8.png", text: "JAJA dijo concha.", static: true, single: true, sw: 40, sh: 38, animFrames: 4, animSpeed: 15, hw: 20, hh: 14});
+createNPC({x:369, y:1088, sprite: "Img/Npc/Npc8.png", text: "Al menos tu cabello es... curioso. Lástima lo demás.", static: true, single: true, sw: 40, sh: 38, animFrames: 4, animSpeed: 15, hw: 20, hh: 14});
+createNPC({x:446, y:1131, sprite: "Img/Npc/Npc14.png", text: "Ignóralos... hablan demasiado para lo poco que entienden... Debo entrenarlos mejor", static: true, single: true, sw: 23, sh: 31, animFrames: 5, animSpeed: 25, hw: 15, hh: 14});
+createNPC({x:730, y:1323, sprite: "Img/Npc/Npc12.png", text: "Soy la guardaespaldas del alcalde. No me quito los ojos de encima de gente como tú. Un paso en falso... y actúo.", static: true, single: true, sw: 28, sh: 31, animFrames: 5, animSpeed: 25, hw: 15, hh: 14});
+createNPC({x:1440, y:1534, sprite: "Img/Letrero.png", text: "Aquí... es donde la única persona que me amaba como yo era murió.", static: true, single: true, sw: 16, sh: 16, animFrames: 1, animSpeed: 15, hw: 12, hh: 7});
+
+createNPC({x:958, y:1190, sprite: "Img/Npc/Npc15.png", text: "¡hola señor! Espero que el resto de personas no le incomoden su estadia, no estan acostumbrados a visitantes diferentes.", static: true, single: true, sw: 21, sh: 26, animFrames: 6, animSpeed: 15, hw: 12, hh: 7});
+createNPC({x:1150, y:510, sprite: "Img/Npc/Npc16.png", text: "Espero que la bruja no vuelva... me preocupa que todo empeore y pierda a toda mi familia.", static: true, single: true, sw: 24, sh: 32, animFrames: 4, animSpeed: 35, hw: 12, hh: 7});
+createNPC({x:1821, y:798, sprite: "Img/Npc/Npc17.png", text: "Mucho heno por cosechar y pocas manos.", static: true, single: true, sw: 35, sh: 35, animFrames: 5, animSpeed: 35, hw: 12, hh: 7});
+createNPC({x:1914, y:712, sprite: "Img/Npc/Npc18.png", text: "Hola forastero... soy muy joven para esto, odio este trabajo ayudando a mi padre.", static: true, single: true, sw: 17, sh: 29, animFrames: 5, animSpeed: 35, hw: 12, hh: 7});
+createNPC({x:687, y:261, sprite: "Img/Npc/Npc19.png", text: "Soportar a mi vecina es terrible.", static: true, single: true, sw: 19, sh: 29, animFrames: 4, animSpeed: 25, hw: 12, hh: 7});
+createNPC({x:1757, y:275, sprite: "Img/Npc/Npc20.png", text: "Ver el agua de la montaña me relaja.", static: true, single: true, sw: 31, sh: 34, animFrames: 5, animSpeed: 15, hw: 12, hh: 7});
+createNPC({x:1090, y:1078, sprite: "Img/Npc/Npc21.png", text: "Suelo dibujar cosas aca, este es mi lugar seguro... Nunca habia visto a alguien como tu... ¿quieres que te de un dibujo? te lo dejo a 5 monedas.", static: true, single: true, sw: 27, sh: 31, animFrames: 5, animSpeed: 15, hw: 12, hh: 7});
+createNPC({x:845, y:645, sprite: "Img/Npc/Npc22.png", text: "El panadero con el pan.", static: true, single: true, sw: 30, sh: 36, animFrames: 8, animSpeed: 15, hw: 12, hh: 7});
+createNPC({x:1520, y:720, sprite: "Img/Npc/Npc23.png", text: "La cosecha casi siempre da buenos frutos.", static: true, single: true, sw: 32, sh: 30, animFrames: 5, animSpeed: 15, hw: 12, hh: 7});
+
+// Enemigos
+createEnemy({x:1194, y:1906, sprite:"Img/enemy1.png"});
+createEnemy({x:2261, y:2043, sprite:"Img/enemy1.png"});
+createEnemy({x:2091, y:2135, sprite:"Img/enemy1.png"});
+createEnemy({x:2435, y:2132, sprite:"Img/enemy1.png"});
+createEnemy({x:2268, y:2314, sprite:"Img/enemy1.png"});
+createEnemy({x:2096, y:2666, sprite:"Img/enemy1.png"});
+createEnemy({x:1254, y:1903, sprite:"Img/enemy1.png"});
+createEnemy({x:618, y:2055, sprite:"Img/enemy1.png"});
+createEnemy({x:1032, y:2202, sprite:"Img/enemy1.png"});
+
+const dialog = document.getElementById("dialog");
+const dialogText = document.getElementById("dialogText");
+const dialogPage = document.getElementById("dialogPage");
+let talking = false;
+
+const DIALOG_MAX_CHARS = 140;
+const dialogState = {
+  pages: [],
+  index: 0
+};
+
+function paginateText(text, maxChars = DIALOG_MAX_CHARS){
+  const clean = String(text ?? "").replace(/\s+/g, " ").trim();
+  if(!clean) return [""];
+
+  const words = clean.split(" ");
+  const pages = [];
+  let current = "";
+
+  words.forEach(word=>{
+    const candidate = current ? current + " " + word : word;
+    if(candidate.length > maxChars && current){
+      pages.push(current);
+      current = word;
+    }else{
+      current = candidate;
+    }
+  });
+
+  if(current) pages.push(current);
+  return pages;
+}
+
+function updateDialogMeta(){
+  if(dialogState.pages.length > 1){
+    dialogPage.textContent = `${dialogState.index + 1}/${dialogState.pages.length}`;
+  }else{
+    dialogPage.textContent = "";
+  }
+}
+
+function clearMovement(){
+  Object.keys(keys).forEach(key=>{
+    keys[key] = false;
+  });
+}
+
+function openDialog(text){
+  dialogState.pages = paginateText(text);
+  dialogState.index = 0;
+  dialogText.textContent = dialogState.pages[0] ?? "";
+  updateDialogMeta();
+  dialog.style.display = "block";
+  talking = true;
+  jumping = false;
+  jumpTimer = 0;
+  clearMovement();
+}
+
+function closeDialog(){
+  dialog.style.display = "none";
+  talking = false;
+  dialogState.pages = [];
+  dialogState.index = 0;
+  dialogText.textContent = "";
+  dialogPage.textContent = "";
+}
+
+function advanceDialog(){
+  if(!talking) return;
+  if(dialogState.index < dialogState.pages.length - 1){
+    dialogState.index++;
+    dialogText.textContent = dialogState.pages[dialogState.index];
+    updateDialogMeta();
+  }else{
+    closeDialog();
+  }
+}
+
+window.addEventListener("keydown",e=>{
+  if(gameOver) return;
+
+  if(talking && e.key !== "Enter"){
+    return;
+  }
+
+  if(e.key === " "){
+    if(e.repeat) return;
+    if(!jumping){
+      jumping = true;
+      jumpTimer = 0;
+    }
+    return;
+  }
+
+  if(e.key === "Enter"){
+    if(talking){
+      advanceDialog();
+      return;
+    }
+
+    for(const npc of npcs){
+      const dx = Math.abs(playerPos.x - npc.x);
+      const dy = Math.abs(playerPos.y - npc.y);
+
+      if(dx < 32 && dy < 32){
+        lookAtPlayer(npc);
+        npc.walking = false;
+        if(npc.shop && npc.shop.type === "heart"){
+          const price = npc.shop.price ?? 1;
+          if(health >= maxHealth){
+            openDialog("Pfff...Ya tienes todos los corazones. No necesitas mas, pero si los llegas a necesitar, hablame.");
+          }else if(!spendCoins(price)){
+            openDialog(`Suelo vender corazones a 3 monedas... pero para alguien como tú... serán ${price}. Riesgos del negocio, ya sabes.`);
+          }else{
+            setHealth(health + 1);
+            openDialog(`Bien hecho muchacho... no doy reembolsos.`);
+          }
+        }else{
+          openDialog(npc.text);
+        }
+        break;
+      }
+    }
+  }
+});
+
+function hurtPlayer(enemy){
+  if(playerHitCooldown > 0 || health <= 0) return;
+
+  setHealth(health - 1);
+  playerHitCooldown = 28;
+  hurtTimer = hurtDuration;
+
+  const dx = playerPos.x - enemy.x;
+  const dy = playerPos.y - enemy.y;
+  const dist = Math.hypot(dx, dy) || 1;
+
+  knockbackVX = (dx / dist) * knockbackStrength;
+  knockbackVY = (dy / dist) * knockbackStrength;
+  knockbackTimer = knockbackDuration;
+
+  // dispara un salto corto al recibir el golpe
+  jumping = true;
+  jumpTimer = 0;
+}
+
+
+
+function update(){
+  if(gameOver){
+    requestAnimationFrame(update);
+    return;
+  }
+
+  payBlocksEntities.forEach(block=>{
+    if(block.msgCooldown > 0) block.msgCooldown--;
+  });
+
+  let nx = playerPos.x;
+  let ny = playerPos.y;
+  moving = false;
+
+  if(playerHitCooldown > 0) playerHitCooldown--;
+
+  if(!talking){
+    if(keys["ArrowUp"]||keys["w"]){
+      ny -= speed;
+      direction = 3;
+      moving = true;
+    }
+    if(keys["ArrowDown"]||keys["s"]){
+      ny += speed;
+      direction = 0;
+      moving = true;
+    }
+    if(keys["ArrowLeft"]||keys["a"]){
+      nx -= speed;
+      direction = 1;
+      moving = true;
+    }
+    if(keys["ArrowRight"]||keys["d"]){
+      nx += speed;
+      direction = 2;
+      moving = true;
+    }
+  }
+
+  if(!collide(nx,ny)){
+    playerPos.x = nx;
+    playerPos.y = ny;
+  }
+
+  if(knockbackTimer > 0){
+    if(!talking){
+      const nextX = playerPos.x + knockbackVX;
+      const nextY = playerPos.y + knockbackVY;
+
+      if(!collide(nextX, playerPos.y)) playerPos.x = nextX;
+      if(!collide(playerPos.x, nextY)) playerPos.y = nextY;
+    }
+
+    knockbackVX *= 0.8;
+    knockbackVY *= 0.8;
+    knockbackTimer--;
+  }
+
+  player.style.left = playerPos.x+"px";
+  player.style.top = playerPos.y+"px";
+
+  /* ANIMACIÓN */
+  if(moving){
+    frameTimer++;
+    if(frameTimer > 10){
+      frame = (frame + 1) % 4;
+      frameTimer = 0;
+    }
+  }else{
+    frame = 0; // frame quieto
+  }
+
+  sprite.style.backgroundPosition =
+    `-${frame * 32}px -${direction * 32}px`;
+
+  let playerScale = 1;
+  let playerLiftY = 0;
+
+  if(jumping){
+    jumpTimer++;
+    const t = Math.min(1, jumpTimer / jumpDuration);
+    playerScale = 1 + Math.sin(Math.PI * t) * jumpScale;
+    playerLiftY -= Math.sin(Math.PI * t) * 10;
+    if(t >= 1){
+      jumping = false;
+    }
+  }
+
+  if(hurtTimer > 0){
+    const ht = 1 - (hurtTimer / hurtDuration);
+    playerLiftY -= Math.sin(Math.PI * ht) * 8;
+    sprite.classList.toggle("hurt", hurtTimer % 4 < 2);
+    hurtTimer--;
+  }else{
+    sprite.classList.remove("hurt");
+  }
+
+  player.style.transform = `translate(-50%, -100%) translateY(${playerLiftY}px) scale(${playerScale})`;
+
+  /* PROFUNDIDAD */
+objects.forEach(o=>{
+  o.el.style.left = o.x + "px";
+  o.el.style.top  = o.y + "px";
+});
+
+npcs.forEach(npc=>{
+  npc.walkTimer++;
+
+  const distPlayer = distance(
+  {x: npc.x, y: npc.y},
+  {x: playerPos.x, y: playerPos.y}
+);
+
+  if(npc.static){
+    if(!npc.single && distPlayer <= 50){
+      lookAtPlayer(npc);
+    }
+    if(npc.single && npc.animFrames > 1){
+      npc.timer++;
+      if(npc.timer > npc.animSpeed){
+        npc.frame = (npc.frame + 1) % npc.animFrames;
+        npc.timer = 0;
+      }
+      npc.sprite.style.backgroundPosition =
+        `-${npc.frame * npc.sw}px 0px`;
+    }else if(npc.single){
+      npc.frame = 0;
+      npc.timer = 0;
+      npc.sprite.style.backgroundPosition = "0px 0px";
+    }else if(!npc.single){
+      npc.frame = 0;
+      npc.timer = 0;
+      npc.sprite.style.backgroundPosition =
+        `-${npc.frame * 32}px -${npc.dir * 32}px`;
+    }
+    npc.el.style.left = npc.x+"px";
+    npc.el.style.top  = npc.y+"px";
+    npc.entityRef.y = npc.y;
+    return;
+  }
+
+if(distPlayer <= 50){
+  npc.walking = false;   // se detiene
+  lookAtPlayer(npc);     // lo mira
+  return;
+}else{
+  npc.walking = true;
+}
+
+if(npc.wait > 0){
+  npc.wait--;
+  return;
+}
+
+
+if(npc.walkTimer > 500){
+  npc.dir = Math.floor(Math.random()*4);
+  npc.walkTimer = 0;
+  npc.wait = 20 + Math.random()*20;
+}
+
+
+  let nx = npc.x;
+  let ny = npc.y;
+
+  if(npc.walking){
+    if(npc.dir === 0) ny += 0.5;
+    if(npc.dir === 1) nx -= 0.5;
+    if(npc.dir === 2) nx += 0.5;
+    if(npc.dir === 3) ny -= 0.5;
+  }
+
+if(!collide(nx, ny, npc)){
+  npc.x = nx;
+  npc.y = ny;
+}else{
+  npc.wait = 20;
+  npc.dir = Math.floor(Math.random()*4);
+}
+
+  npc.el.style.left = npc.x+"px";
+  npc.el.style.top  = npc.y+"px";
+  npc.entityRef.y = npc.y;
+
+if(npc.walking){
+  npc.timer++;
+  if(npc.timer > 12){
+    npc.frame = (npc.frame + 1) % 4;
+    npc.timer = 0;
+  }
+}else{
+  npc.frame = 0;     // quieto → primer sprite
+  npc.timer = 0;     // resetea animación
+}
+
+  if(!npc.single){
+    npc.sprite.style.backgroundPosition =
+      `-${npc.frame * 32}px -${npc.dir * 32}px`;
+  }
+
+});
+
+enemies.forEach(enemy=>{
+  enemy.walkTimer++;
+  if(enemy.attackCooldown > 0) enemy.attackCooldown--;
+
+  const distPlayer = distance(
+    {x: enemy.x, y: enemy.y},
+    {x: playerPos.x, y: playerPos.y}
+  );
+
+  const chaseRange = 160;
+  const attackRange = 22;
+
+  if(distPlayer <= chaseRange){
+    const dx = playerPos.x - enemy.x;
+    const dy = playerPos.y - enemy.y;
+
+    if(Math.abs(dx) > Math.abs(dy)){
+      enemy.dir = dx > 0 ? 2 : 1;
+    }else{
+      enemy.dir = dy > 0 ? 0 : 3;
+    }
+
+    let nx = enemy.x;
+    let ny = enemy.y;
+    const speedE = 0.7;
+
+    if(Math.abs(dx) > 2 || Math.abs(dy) > 2){
+      if(dx > 2) nx += speedE;
+      if(dx < -2) nx -= speedE;
+      if(dy > 2) ny += speedE;
+      if(dy < -2) ny -= speedE;
+    }
+
+    if(!collide(nx, ny, enemy)){
+      enemy.x = nx;
+      enemy.y = ny;
+    }
+
+    if(distPlayer <= attackRange && enemy.attackCooldown === 0){
+      hurtPlayer(enemy);
+      enemy.attackCooldown = 90;
+    }
+  }else{
+    // paseo simple si el jugador está lejos
+    if(enemy.walkTimer > 500){
+      enemy.dir = Math.floor(Math.random()*4);
+      enemy.walkTimer = 0;
+      enemy.wait = 20 + Math.random()*20;
+    }
+
+    if(enemy.wait > 0){
+      enemy.wait--;
+    }else{
+      let nx = enemy.x;
+      let ny = enemy.y;
+      const speedE = 0.4;
+      if(enemy.dir === 0) ny += speedE;
+      if(enemy.dir === 1) nx -= speedE;
+      if(enemy.dir === 2) nx += speedE;
+      if(enemy.dir === 3) ny -= speedE;
+      if(!collide(nx, ny, enemy)){
+        enemy.x = nx;
+        enemy.y = ny;
+      }else{
+        enemy.wait = 20;
+        enemy.dir = Math.floor(Math.random()*4);
+      }
+    }
+  }
+
+  enemy.el.style.left = enemy.x+"px";
+  enemy.el.style.top  = enemy.y+"px";
+  enemy.entityRef.y = enemy.y;
+
+  enemy.timer++;
+  if(enemy.timer > 12){
+    enemy.frame = (enemy.frame + 1) % 4;
+    enemy.timer = 0;
+  }
+
+  enemy.sprite.style.backgroundPosition =
+    `-${enemy.frame * 32}px -${enemy.dir * 32}px`;
+
+  // salto ocasional del enemigo (efecto visual)
+  enemy.jumpWait--;
+  if(enemy.jumpWait <= 0 && !enemy.jumping){
+    enemy.jumping = true;
+    enemy.jumpTimer = 0;
+  }
+
+  if(enemy.jumping){
+    enemy.jumpTimer++;
+    const t = Math.min(1, enemy.jumpTimer / 16);
+    const scale = 1 + Math.sin(Math.PI * t) * 0.15;
+    enemy.el.style.transform = `translate(-50%, -105%) scale(${scale})`;
+    if(t >= 1){
+      enemy.jumping = false;
+      enemy.el.style.transform = "translate(-50%, -100%)";
+      enemy.jumpWait = 90 + Math.random()*150;
+    }
+  }
+});
+
+function getDepthY(e){
+  if(e.isPlayer){
+    return playerPos.y;
+  }
+  return e.y;
+}
+
+function sortDepth(){
+  entities.forEach(e=>{
+    e.el.style.zIndex = Math.floor(getDepthY(e));
+  });
+}
+
+
+player.style.left = playerPos.x+"px";
+player.style.top  = playerPos.y+"px";
+
+sortDepth();
+
+
+
+
+
+  // CENTRAR CAMARA EN EL JUGADOR
+camera.x = playerPos.x - (screen.w / 2) / zoom;
+camera.y = playerPos.y - (screen.h / 2) / zoom;
+
+
+// LIMITES DEL MAPA
+camera.x = Math.max(0, Math.min(camera.x, 2880- screen.w / zoom));
+camera.y = Math.max(0, Math.min(camera.y, 2880 - screen.h / zoom));
+
+
+world.style.left = -camera.x * zoom + "px";
+world.style.top  = -camera.y * zoom + "px";
+world.style.transform = `scale(${zoom})`;
+world.style.transformOrigin = "top left";
+
+/* ANIMACIÓN DE MONEDAS */
+function spendCoins(amount){
+  if(coins < amount) return false;
+  coins -= amount;
+  updateHUD();
+  return true;
+}
+
+coinsEntities.forEach(c=>{
+  if(c.collected) return;
+
+  c.timer++;
+  if(c.timer > 12){
+    c.frame = (c.frame + 1) % 6;
+    c.timer = 0;
+  }
+
+  c.sprite.style.backgroundPosition =
+    `-${c.frame * 16}px 0px`;
+});
+
+/* ANIMACION DE ARBUSTOS */
+bushesEntities.forEach(b=>{
+  b.timer++;
+  if(b.timer > 20){
+    b.frame = (b.frame + 1) % 4;
+    b.timer = 0;
+  }
+
+  b.sprite.style.backgroundPosition =
+    `-${b.frame * 16}px 0px`;
+});
+
+/* ANIMACION DE OBJETOS */
+animatedObjectsEntities.forEach(o=>{
+  o.timer++;
+  if(o.timer > o.speed){
+    o.frame = (o.frame + 1) % o.frames;
+    o.timer = 0;
+  }
+
+  o.sprite.style.backgroundPosition =
+    `-${o.frame * o.frameW}px 0px`;
+});
+
+
+
+checkCoinPickup();
+  const zone = detectZone();
+  playZoneMusic(zone);
+  setFogVisible(isInFogZone());
+  updateMusicFade();
+  requestAnimationFrame(update);
+}
+
+const camera = {
+  x: 0,
+  y: 0
+};
+
+const screen = {
+  w: game.clientWidth,
+  h: game.clientHeight
+};
+
+function addCoins(amount){
+  coins += amount;
+  updateHUD();
+}
+
+function setHealth(value){
+  health = Math.max(0, Math.min(maxHealth, value));
+  updateHUD();
+  if(health === 0){
+    showGameOver();
+  }
+}
+
+restartButton.addEventListener("click", ()=>{
+  window.location.reload();
+});
+
+
+update();
+updateHUD();
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+

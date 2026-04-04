@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Editor de Colisiones</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#101012;color:#e8e8e8;font-family:Consolas,monospace;display:flex;height:100vh}
+#ui{width:320px;background:#18181b;padding:12px;overflow:auto;border-right:1px solid #30303a}
+#worldWrap{flex:1;position:relative;overflow:auto;background:#050505}
+#world{
+  position:relative;
+  width:2880px;
+  height:2880px;
+  background:url('mapa.png') center/cover no-repeat;
+  image-rendering:pixelated;
+  cursor:crosshair;
+}
+#world::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background-image:
+    linear-gradient(to right, rgba(255,255,255,.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,.05) 1px, transparent 1px);
+  background-size:32px 32px;
+}
+.box{
+  position:absolute;
+  border:2px solid #16e398;
+  background:rgba(22,227,152,.2);
+  user-select:none;
+}
+.box.selected{
+  border-color:#ffcc00;
+  background:rgba(255,204,0,.2);
+}
+.handle{
+  position:absolute;
+  width:10px;
+  height:10px;
+  background:#f4f4f4;
+  border:1px solid #111;
+  display:none;
+}
+.box.selected .handle{display:block}
+.h-nw{left:-6px;top:-6px;cursor:nwse-resize}
+.h-n{left:50%;top:-6px;transform:translateX(-50%);cursor:ns-resize}
+.h-ne{right:-6px;top:-6px;cursor:nesw-resize}
+.h-e{right:-6px;top:50%;transform:translateY(-50%);cursor:ew-resize}
+.h-se{right:-6px;bottom:-6px;cursor:nwse-resize}
+.h-s{left:50%;bottom:-6px;transform:translateX(-50%);cursor:ns-resize}
+.h-sw{left:-6px;bottom:-6px;cursor:nesw-resize}
+.h-w{left:-6px;top:50%;transform:translateY(-50%);cursor:ew-resize}
+.coin{
+  position:absolute;
+  width:16px;
+  height:16px;
+  border:2px solid #ffd84d;
+  border-radius:50%;
+  background:rgba(255,216,77,.35);
+  box-shadow:0 0 0 1px #463100 inset;
+  cursor:grab;
+}
+.coin.selected{
+  border-color:#ff5f5f;
+  background:rgba(255,95,95,.45);
+}
+input,button,textarea{
+  width:100%;
+  margin:4px 0;
+  background:#23232b;
+  border:1px solid #444458;
+  color:#fafafa;
+  padding:6px;
+}
+button{cursor:pointer}
+button:hover{background:#2d2d39}
+textarea{height:180px;resize:vertical}
+.item{
+  padding:5px;
+  border:1px solid #333340;
+  margin:4px 0;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.item:hover{background:#21212a}
+.item.active{border-color:#ffcc00;background:#2b280e}
+.hint{font-size:12px;color:#bdbdcf;line-height:1.35}
+.modeRow{display:flex;gap:6px}
+.modeRow button{margin:4px 0}
+.modeBtn.active{border-color:#ffcc00;background:#3a3418}
+.thumb{
+  width:32px;
+  height:32px;
+  object-fit:contain;
+  image-rendering:pixelated;
+  background:#0b0b0f;
+  border:1px solid #2b2b36;
+  flex:0 0 auto;
+}
+.itemText{flex:1;min-width:0}
+.preview{
+  width:100%;
+  height:96px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#0b0b0f;
+  border:1px solid #2b2b36;
+  margin:6px 0;
+}
+.preview img{
+  max-width:100%;
+  max-height:100%;
+  object-fit:contain;
+  image-rendering:pixelated;
+}
+.row{display:flex;gap:6px}
+.row button{width:100%}
+</style>
+</head>
+<body>
+<div id="ui">
+  <h3>Objeto</h3>
+  <label>X (centro)<input id="x" type="number"></label>
+  <label>Y (base)<input id="y" type="number"></label>
+  <label>Hitbox W<input id="hw" type="number"></label>
+  <label>Hitbox H<input id="hh" type="number"></label>
+  <label>Sprite<input id="sprite"></label>
+  <div id="spritePreview" class="preview"></div>
+  <label>Sprite W<input id="sw" type="number"></label>
+  <label>Sprite H<input id="sh" type="number"></label>
+  <button id="apply">Aplicar cambios</button>
+  <div class="row">
+    <button id="copy">Copiar colision</button>
+    <button id="paste">Pegar colision</button>
+  </div>
+  <button id="delete">Eliminar seleccionado</button>
+  <div class="modeRow">
+    <button id="modeHitbox" class="modeBtn active">Modo Hitbox</button>
+    <button id="modeCoin" class="modeBtn">Modo Moneda</button>
+  </div>
+  <hr>
+  <button id="export">Exportar codigo</button>
+  <button id="import">Importar codigo</button>
+  <textarea id="output" placeholder="Pega aqui: const objects = [ ... ];"></textarea>
+  <hr>
+  <div class="hint">
+    Dibujar: click y arrastrar en espacio vacio.<br>
+    Mover: arrastrar dentro de la caja.<br>
+    Redimensionar: arrastrar tiradores blancos.
+  </div>
+  <hr>
+  <div id="list"></div>
+</div>
+<div id="worldWrap"><div id="world"></div></div>
+
+<script>
+const world = document.getElementById("world");
+const list = document.getElementById("list");
+const MIN_SIZE = 8;
+const COIN_SIZE = 16;
+const HANDLE_DIRS = ["nw","n","ne","e","se","s","sw","w"];
+
+const $x = document.getElementById("x");
+const $y = document.getElementById("y");
+const $hw = document.getElementById("hw");
+const $hh = document.getElementById("hh");
+const $sprite = document.getElementById("sprite");
+const $sw = document.getElementById("sw");
+const $sh = document.getElementById("sh");
+const $output = document.getElementById("output");
+const $spritePreview = document.getElementById("spritePreview");
+
+let objects = [];
+let selected = null;
+let coins = [];
+let selectedCoin = null;
+let pointerState = null;
+let mode = "hitbox";
+let clipboardCollision = null;
+
+function clamp(v, min, max){
+  return Math.max(min, Math.min(max, v));
+}
+
+function getWorldPoint(event){
+  const r = world.getBoundingClientRect();
+  return {
+    x: clamp(event.clientX - r.left, 0, world.clientWidth),
+    y: clamp(event.clientY - r.top, 0, world.clientHeight)
+  };
+}
+
+function ensureMinAndNormalizeRect(rect){
+  if (rect.right - rect.left < MIN_SIZE) rect.right = rect.left + MIN_SIZE;
+  if (rect.bottom - rect.top < MIN_SIZE) rect.bottom = rect.top + MIN_SIZE;
+  rect.left = clamp(rect.left, 0, world.clientWidth - MIN_SIZE);
+  rect.top = clamp(rect.top, 0, world.clientHeight - MIN_SIZE);
+  rect.right = clamp(rect.right, rect.left + MIN_SIZE, world.clientWidth);
+  rect.bottom = clamp(rect.bottom, rect.top + MIN_SIZE, world.clientHeight);
+  return rect;
+}
+
+function rectFromObject(o){
+  return {
+    left: o.x - o.hw / 2,
+    right: o.x + o.hw / 2,
+    top: o.y - o.hh,
+    bottom: o.y
+  };
+}
+
+function objectFromRect(o, rect){
+  const w = rect.right - rect.left;
+  const h = rect.bottom - rect.top;
+  o.hw = w;
+  o.hh = h;
+  o.x = rect.left + w / 2;
+  o.y = rect.bottom;
+}
+
+function updateBoxElement(o){
+  const rect = rectFromObject(o);
+  o.el.style.left = rect.left + "px";
+  o.el.style.top = rect.top + "px";
+  o.el.style.width = o.hw + "px";
+  o.el.style.height = o.hh + "px";
+}
+
+function updatePreview(src){
+  $spritePreview.innerHTML = "";
+  if(!src) return;
+  const img = document.createElement("img");
+  img.src = src;
+  img.alt = "Sprite";
+  img.onerror = () => { $spritePreview.innerHTML = ""; };
+  $spritePreview.appendChild(img);
+}
+
+function updateFields(){
+  if(selected){
+    $x.value = Math.round(selected.x);
+    $y.value = Math.round(selected.y);
+    $hw.value = Math.round(selected.hw);
+    $hh.value = Math.round(selected.hh);
+    $sprite.value = selected.sprite || "";
+    $sw.value = selected.sw || 0;
+    $sh.value = selected.sh || 0;
+    updatePreview(selected.sprite || "");
+    return;
+  }
+  if(selectedCoin){
+    $x.value = Math.round(selectedCoin.x);
+    $y.value = Math.round(selectedCoin.y);
+    $hw.value = "";
+    $hh.value = "";
+    $sprite.value = "";
+    $sw.value = "";
+    $sh.value = "";
+    updatePreview("");
+    return;
+  }
+  $x.value = "";
+  $y.value = "";
+  $hw.value = "";
+  $hh.value = "";
+  $sprite.value = "";
+  $sw.value = "";
+  $sh.value = "";
+  updatePreview("");
+}
+
+function selectObject(o){
+  selected = o;
+  selectedCoin = null;
+  updateFields();
+  renderList();
+}
+
+function selectCoin(c){
+  selectedCoin = c;
+  selected = null;
+  updateFields();
+  renderList();
+}
+
+function setMode(nextMode){
+  mode = nextMode;
+  document.getElementById("modeHitbox").classList.toggle("active", mode === "hitbox");
+  document.getElementById("modeCoin").classList.toggle("active", mode === "coin");
+  world.style.cursor = mode === "coin" ? "copy" : "crosshair";
+}
+
+function createBox(x, y, w = 80, h = 80){
+  const el = document.createElement("div");
+  el.className = "box";
+  HANDLE_DIRS.forEach(dir => {
+    const hEl = document.createElement("div");
+    hEl.className = "handle h-" + dir;
+    hEl.dataset.handle = dir;
+    el.appendChild(hEl);
+  });
+  world.appendChild(el);
+
+  const obj = { x, y, hw: w, hh: h, sprite: "", sw: 0, sh: 0, el };
+  objects.push(obj);
+
+  el.addEventListener("pointerdown", (event) => {
+    if(event.button !== 0) return;
+    event.stopPropagation();
+    selectObject(obj);
+    const point = getWorldPoint(event);
+    const handle = event.target.dataset.handle;
+    const rect = rectFromObject(obj);
+    if (handle){
+      pointerState = {
+        type: "resize",
+        obj,
+        handle,
+        startPoint: point,
+        startRect: { ...rect }
+      };
+    } else {
+      pointerState = {
+        type: "move",
+        obj,
+        startPoint: point,
+        startRect: { ...rect }
+      };
+    }
+    el.setPointerCapture(event.pointerId);
+  });
+
+  updateBoxElement(obj);
+  selectObject(obj);
+  return obj;
+}
+
+function updateCoinElement(c){
+  c.el.style.left = Math.round(c.x - COIN_SIZE / 2) + "px";
+  c.el.style.top = Math.round(c.y - COIN_SIZE) + "px";
+}
+
+function createCoin(x, y){
+  const el = document.createElement("div");
+  el.className = "coin";
+  world.appendChild(el);
+  const coin = { x, y, el };
+  coins.push(coin);
+  updateCoinElement(coin);
+
+  el.addEventListener("pointerdown", (event) => {
+    if(event.button !== 0) return;
+    event.stopPropagation();
+    selectCoin(coin);
+    const point = getWorldPoint(event);
+    pointerState = {
+      type: "coinMove",
+      coin,
+      startPoint: point,
+      startCoin: { x: coin.x, y: coin.y }
+    };
+    el.setPointerCapture(event.pointerId);
+  });
+  selectCoin(coin);
+  return coin;
+}
+
+function updateByPointer(event){
+  if(!pointerState) return;
+  const point = getWorldPoint(event);
+
+  if(pointerState.type === "draw"){
+    const left = Math.min(pointerState.startPoint.x, point.x);
+    const right = Math.max(pointerState.startPoint.x, point.x);
+    const top = Math.min(pointerState.startPoint.y, point.y);
+    const bottom = Math.max(pointerState.startPoint.y, point.y);
+    const rect = ensureMinAndNormalizeRect({ left, right, top, bottom });
+    objectFromRect(pointerState.obj, rect);
+    updateBoxElement(pointerState.obj);
+  }
+
+  if(pointerState.type === "move"){
+    const dx = point.x - pointerState.startPoint.x;
+    const dy = point.y - pointerState.startPoint.y;
+    const src = pointerState.startRect;
+    let rect = {
+      left: src.left + dx,
+      right: src.right + dx,
+      top: src.top + dy,
+      bottom: src.bottom + dy
+    };
+    const w = rect.right - rect.left;
+    const h = rect.bottom - rect.top;
+    if(rect.left < 0){ rect.left = 0; rect.right = w; }
+    if(rect.top < 0){ rect.top = 0; rect.bottom = h; }
+    if(rect.right > world.clientWidth){ rect.right = world.clientWidth; rect.left = rect.right - w; }
+    if(rect.bottom > world.clientHeight){ rect.bottom = world.clientHeight; rect.top = rect.bottom - h; }
+    objectFromRect(pointerState.obj, rect);
+    updateBoxElement(pointerState.obj);
+  }
+
+  if(pointerState.type === "resize"){
+    const src = { ...pointerState.startRect };
+    const h = pointerState.handle;
+    if(h.includes("n")) src.top = point.y;
+    if(h.includes("s")) src.bottom = point.y;
+    if(h.includes("w")) src.left = point.x;
+    if(h.includes("e")) src.right = point.x;
+    if(!h.includes("n") && !h.includes("s")){
+      src.top = pointerState.startRect.top;
+      src.bottom = pointerState.startRect.bottom;
+    }
+    if(!h.includes("w") && !h.includes("e")){
+      src.left = pointerState.startRect.left;
+      src.right = pointerState.startRect.right;
+    }
+    if(src.left > src.right){ const t = src.left; src.left = src.right; src.right = t; }
+    if(src.top > src.bottom){ const t = src.top; src.top = src.bottom; src.bottom = t; }
+    const rect = ensureMinAndNormalizeRect(src);
+    objectFromRect(pointerState.obj, rect);
+    updateBoxElement(pointerState.obj);
+  }
+
+  if(pointerState.type === "coinMove"){
+    const dx = point.x - pointerState.startPoint.x;
+    const dy = point.y - pointerState.startPoint.y;
+    pointerState.coin.x = clamp(pointerState.startCoin.x + dx, 0, world.clientWidth);
+    pointerState.coin.y = clamp(pointerState.startCoin.y + dy, 0, world.clientHeight);
+    updateCoinElement(pointerState.coin);
+  }
+
+  updateFields();
+  renderList();
+}
+
+function finishPointer(event){
+  if(!pointerState) return;
+  const targetEl =
+    pointerState.obj ? pointerState.obj.el :
+    pointerState.coin ? pointerState.coin.el :
+    null;
+  if(targetEl && targetEl.hasPointerCapture(event.pointerId)){
+    targetEl.releasePointerCapture(event.pointerId);
+  }
+  pointerState = null;
+  renderList();
+}
+
+world.addEventListener("pointerdown", (event) => {
+  if(event.button !== 0) return;
+  const point = getWorldPoint(event);
+  if(mode === "coin"){
+    createCoin(point.x, point.y);
+    return;
+  }
+  const obj = createBox(point.x, point.y, MIN_SIZE, MIN_SIZE);
+  pointerState = {
+    type: "draw",
+    obj,
+    startPoint: point
+  };
+  obj.el.setPointerCapture(event.pointerId);
+});
+
+world.addEventListener("pointermove", updateByPointer);
+world.addEventListener("pointerup", finishPointer);
+world.addEventListener("pointercancel", finishPointer);
+
+function renderList(){
+  list.innerHTML = "";
+  objects.forEach((o, i) => {
+    const it = document.createElement("div");
+    it.className = "item" + (o === selected ? " active" : "");
+    if(o.sprite){
+      const img = document.createElement("img");
+      img.className = "thumb";
+      img.src = o.sprite;
+      img.alt = "Sprite";
+      img.onerror = () => { img.remove(); };
+      it.appendChild(img);
+    }
+    const text = document.createElement("div");
+    text.className = "itemText";
+    text.textContent = `[H${i}] x:${Math.round(o.x)} y:${Math.round(o.y)} w:${Math.round(o.hw)} h:${Math.round(o.hh)}`;
+    it.appendChild(text);
+    it.onclick = () => selectObject(o);
+    list.appendChild(it);
+    o.el.classList.toggle("selected", o === selected);
+  });
+  coins.forEach((c, i) => {
+    const it = document.createElement("div");
+    it.className = "item" + (c === selectedCoin ? " active" : "");
+    it.textContent = `[M${i}] x:${Math.round(c.x)} y:${Math.round(c.y)}`;
+    it.onclick = () => selectCoin(c);
+    list.appendChild(it);
+    c.el.classList.toggle("selected", c === selectedCoin);
+  });
+}
+
+function clearAll(){
+  objects.forEach(o => o.el.remove());
+  coins.forEach(c => c.el.remove());
+  objects = [];
+  coins = [];
+  selected = null;
+  selectedCoin = null;
+  renderList();
+}
+
+function parseArrayLiteral(raw){
+  return Function('"use strict"; return (' + raw + ");")();
+}
+
+function extractArrayByName(source, name){
+  const re = new RegExp("(?:const|let|var)\\s+" + name + "\\s*=\\s*(\\[[\\s\\S]*?\\])\\s*;?", "m");
+  const m = source.match(re);
+  return m ? m[1] : null;
+}
+
+function parseImportBundle(text){
+  const raw = (text || "").trim();
+  if(!raw) throw new Error("El cuadro esta vacio.");
+
+  let parsedObjects = null;
+  let parsedCoins = [];
+
+  // Caso 1: JSON valido
+  try{
+    const asJson = JSON.parse(raw);
+    if(Array.isArray(asJson)) parsedObjects = asJson;
+    else if(asJson && typeof asJson === "object"){
+      if(Array.isArray(asJson.objects)) parsedObjects = asJson.objects;
+      if(Array.isArray(asJson.coinsMap)) parsedCoins = asJson.coinsMap;
+    }
+  }catch(_err){}
+
+  // Caso 2: codigo JS exportado por este editor
+  if(!parsedObjects){
+    const objLiteral = extractArrayByName(raw, "objects");
+    const coinLiteral = extractArrayByName(raw, "coinsMap");
+    if(objLiteral) parsedObjects = parseArrayLiteral(objLiteral);
+    if(coinLiteral) parsedCoins = parseArrayLiteral(coinLiteral);
+  }
+
+  // Caso 3: arreglo suelto (solo objects)
+  if(!parsedObjects){
+    const start = raw.indexOf("[");
+    const end = raw.lastIndexOf("]");
+    if(start !== -1 && end !== -1 && end > start){
+      parsedObjects = parseArrayLiteral(raw.slice(start, end + 1));
+    }
+  }
+
+  if(!Array.isArray(parsedObjects)){
+    throw new Error("La importacion debe ser un arreglo de objetos.");
+  }
+
+  const objectsParsed = parsedObjects.map((item, i) => {
+    const x = Number(item.x);
+    const y = Number(item.y);
+    const hw = Number(item.hw);
+    const hh = Number(item.hh);
+    if(!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(hw) || !Number.isFinite(hh)){
+      throw new Error("Objeto #" + i + " invalido: faltan x, y, hw o hh numericos.");
+    }
+    return {
+      x: clamp(x, 0, world.clientWidth),
+      y: clamp(y, 0, world.clientHeight),
+      hw: Math.max(MIN_SIZE, hw),
+      hh: Math.max(MIN_SIZE, hh),
+      sprite: typeof item.sprite === "string" ? item.sprite : "",
+      sw: Math.max(0, Number(item.sw) || 0),
+      sh: Math.max(0, Number(item.sh) || 0)
+    };
+  });
+
+  const coinsParsed = (Array.isArray(parsedCoins) ? parsedCoins : []).map((item, i) => {
+    const x = Number(item.x);
+    const y = Number(item.y);
+    if(!Number.isFinite(x) || !Number.isFinite(y)){
+      throw new Error("Moneda #" + i + " invalida: faltan x o y numericos.");
+    }
+    return {
+      x: clamp(x, 0, world.clientWidth),
+      y: clamp(y, 0, world.clientHeight)
+    };
+  });
+
+  return { objectsParsed, coinsParsed };
+}
+
+document.getElementById("apply").onclick = () => {
+  if(selected){
+    selected.x = clamp(+$x.value || 0, 0, world.clientWidth);
+    selected.y = clamp(+$y.value || 0, 0, world.clientHeight);
+    selected.hw = Math.max(MIN_SIZE, +$hw.value || MIN_SIZE);
+    selected.hh = Math.max(MIN_SIZE, +$hh.value || MIN_SIZE);
+    selected.sprite = $sprite.value || "";
+    selected.sw = Math.max(0, +$sw.value || 0);
+    selected.sh = Math.max(0, +$sh.value || 0);
+    updateBoxElement(selected);
+    updatePreview(selected.sprite || "");
+  }else if(selectedCoin){
+    selectedCoin.x = clamp(+$x.value || 0, 0, world.clientWidth);
+    selectedCoin.y = clamp(+$y.value || 0, 0, world.clientHeight);
+    updateCoinElement(selectedCoin);
+  }else{
+    return;
+  }
+  renderList();
+};
+
+document.getElementById("copy").onclick = () => {
+  if(!selected) return;
+  clipboardCollision = {
+    x: selected.x,
+    y: selected.y,
+    hw: selected.hw,
+    hh: selected.hh,
+    sprite: selected.sprite,
+    sw: selected.sw,
+    sh: selected.sh
+  };
+};
+
+document.getElementById("paste").onclick = () => {
+  if(!clipboardCollision) return;
+  const data = clipboardCollision;
+  const obj = createBox(data.x, data.y, data.hw, data.hh);
+  obj.sprite = data.sprite;
+  obj.sw = data.sw;
+  obj.sh = data.sh;
+  updateBoxElement(obj);
+  selectObject(obj);
+  renderList();
+};
+
+document.getElementById("delete").onclick = () => {
+  if(selected){
+    selected.el.remove();
+    objects = objects.filter(o => o !== selected);
+    selected = objects[objects.length - 1] || null;
+  }else if(selectedCoin){
+    selectedCoin.el.remove();
+    coins = coins.filter(c => c !== selectedCoin);
+    selectedCoin = coins[coins.length - 1] || null;
+  }else{
+    return;
+  }
+  updateFields();
+  renderList();
+};
+
+document.addEventListener("keydown", (event) => {
+  if(event.ctrlKey && event.key.toLowerCase() === "c"){
+    if(selected){
+      event.preventDefault();
+      clipboardCollision = {
+        x: selected.x,
+        y: selected.y,
+        hw: selected.hw,
+        hh: selected.hh,
+        sprite: selected.sprite,
+        sw: selected.sw,
+        sh: selected.sh
+      };
+    }
+  }
+  if(event.ctrlKey && event.key.toLowerCase() === "v"){
+    if(clipboardCollision){
+      event.preventDefault();
+      const data = clipboardCollision;
+      const obj = createBox(data.x, data.y, data.hw, data.hh);
+      obj.sprite = data.sprite;
+      obj.sw = data.sw;
+      obj.sh = data.sh;
+      updateBoxElement(obj);
+      selectObject(obj);
+      renderList();
+    }
+  }
+});
+
+document.getElementById("export").onclick = () => {
+  let txt = "/* OBJETOS CON SPRITE + HITBOX */\nconst objects = [\n";
+  objects.forEach(o => {
+    txt += `  {x:${Math.round(o.x)}, y:${Math.round(o.y)}, sprite:"${o.sprite}", sw:${Math.round(o.sw)}, sh:${Math.round(o.sh)}, hw:${Math.round(o.hw)}, hh:${Math.round(o.hh)}},\n`;
+  });
+  txt += "];\n\n/* MONEDAS */\nconst coinsMap = [\n";
+  coins.forEach(c => {
+    txt += `  {x:${Math.round(c.x)}, y:${Math.round(c.y)}},\n`;
+  });
+  txt += "];";
+  $output.value = txt;
+};
+
+document.getElementById("import").onclick = () => {
+  try{
+    const imported = parseImportBundle($output.value);
+    clearAll();
+    imported.objectsParsed.forEach(data => {
+      const obj = createBox(data.x, data.y, data.hw, data.hh);
+      obj.sprite = data.sprite;
+      obj.sw = data.sw;
+      obj.sh = data.sh;
+      updateBoxElement(obj);
+    });
+    imported.coinsParsed.forEach(data => {
+      createCoin(data.x, data.y);
+    });
+    if(objects.length){
+      selectObject(objects[objects.length - 1]);
+    }else if(coins.length){
+      selectCoin(coins[coins.length - 1]);
+    }
+    renderList();
+  }catch(err){
+    alert("Error al importar: " + err.message);
+  }
+};
+
+document.getElementById("modeHitbox").onclick = () => setMode("hitbox");
+document.getElementById("modeCoin").onclick = () => setMode("coin");
+$sprite.addEventListener("input", () => {
+  if(selected){
+    updatePreview($sprite.value || "");
+  }
+});
+
+renderList();
+</script>
+</body>
+</html>
