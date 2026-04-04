@@ -2026,6 +2026,12 @@ window.addEventListener("keydown",e=>{
     return;
   }
 
+  const key = (e.key && e.key.length === 1) ? e.key.toLowerCase() : e.key;
+  if(key === "ArrowUp" || key === "ArrowDown" || key === "ArrowLeft" || key === "ArrowRight" ||
+     key === "w" || key === "a" || key === "s" || key === "d"){
+    keys[key] = true;
+  }
+
   if(e.key === " "){
     if(e.repeat) return;
     handleJumpPress();
@@ -2089,7 +2095,10 @@ if(isTouchDevice && touchControls){
     bindHold(btnAction, ()=>handleActionPress(), ()=>{});
   }
 }
-window.addEventListener("keyup",e=>keys[e.key]=false);
+window.addEventListener("keyup",e=>{
+  const key = (e.key && e.key.length === 1) ? e.key.toLowerCase() : e.key;
+  keys[key]=false;
+});
 
 /* COLISIÓN SOLO CON LA BASE */
 function collide(nx, ny, self = null){
