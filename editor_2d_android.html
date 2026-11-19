@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#171923">
+<title>Editor 2D de niveles</title>
+<style>
+:root{color-scheme:dark;--bg:#11131b;--panel:#1b1e29;--panel2:#242938;--line:#343b4d;--text:#edf0f7;--muted:#aab2c4;--accent:#ff727e;--accent2:#6ed6bd}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,input,select,textarea{font:inherit}
+button{min-height:44px;border:1px solid var(--line);border-radius:12px;background:#303749;color:var(--text);padding:10px 13px;font-weight:650;touch-action:manipulation}
+button:active{transform:scale(.98);background:#3c465e}
+button.primary{background:#a94355;border-color:#c65c6d}
+button.good{background:#236b5e;border-color:#328d7b}
+input,select,textarea{width:100%;min-height:44px;margin-top:7px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#121620;color:var(--text)}
+label{display:block;color:var(--muted);font-size:13px;margin-top:10px}
+#app{height:100dvh;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+#topbar{height:54px;flex:none;display:flex;align-items:center;gap:10px;padding:0 12px;background:#191c26;border-bottom:1px solid var(--line)}
+#brand{font-weight:800;letter-spacing:.2px;white-space:nowrap}
+#status{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+#topbar button{min-height:38px;padding:7px 11px}
+#workspace{flex:1;min-height:0;display:flex;position:relative}
+#viewport{flex:1;min-width:0;min-height:0;overflow:auto;background-color:#090b10;background-image:radial-gradient(#252a38 1px,transparent 1px);background-size:16px 16px;overscroll-behavior:contain;touch-action:pan-x pan-y}
+#map{display:block;image-rendering:pixelated;max-width:none;touch-action:none;cursor:crosshair}
+#panel{width:320px;flex:none;overflow:auto;background:var(--panel);border-left:1px solid var(--line);padding:14px;overscroll-behavior:contain}
+.panel-section{padding:0 0 15px;margin:0 0 15px;border-bottom:1px solid var(--line)}
+.panel-section h3{font-size:14px;margin:0 0 10px;font-weight:750}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}
+#palette{height:190px;overflow:auto;position:relative;border:1px solid #4a5265;border-radius:10px;background:#090b10;touch-action:pan-x pan-y}
+#tilesetView{display:block;image-rendering:pixelated;max-width:none;user-select:none;-webkit-user-drag:none}
+#selector{position:absolute;border:2px solid var(--accent);background:#ff727e22;pointer-events:none;box-shadow:0 0 0 1px #fff5}
+#help{font-size:12px;color:var(--muted);line-height:1.45;margin-top:8px}
+#output{height:130px;resize:vertical;font-family:ui-monospace,monospace;font-size:11px}
+#mobileControls{display:none;position:absolute;left:12px;right:12px;bottom:12px;justify-content:space-between;align-items:end;pointer-events:none;z-index:5}
+.pad-group{display:flex;gap:9px;pointer-events:auto}
+#mobileControls button{width:58px;height:58px;border-radius:18px;background:#222a3bdd;border:1px solid #78839b;font-size:22px;backdrop-filter:blur(6px);touch-action:none;user-select:none}
+#mobileControls button.jump{width:72px;height:72px;border-radius:50%;background:#a94355dd}
+#mobileControls button.active{background:#53627f}
+#toast{position:absolute;left:50%;top:12px;transform:translateX(-50%);padding:9px 13px;border-radius:10px;background:#252c3c;color:white;font-size:12px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:10}
+#toast.show{opacity:1}
+#fileInput{display:none}
+@media(max-width:760px){
+  #topbar{height:50px;padding:0 9px;gap:7px}
+  #brand{font-size:14px}
+  #status{font-size:10px}
+  #workspace{display:block}
+  #viewport{width:100%;height:100%}
+  #panel{position:absolute;z-index:8;right:0;top:0;bottom:0;width:min(88vw,360px);box-shadow:-12px 0 35px #0009;transform:translateX(105%);transition:transform .22s ease;border-left:1px solid var(--line)}
+  #panel.open{transform:translateX(0)}
+  #panelClose{display:block!important}
+  #mobileControls{display:flex}
+  #map{touch-action:none}
+}
+@media(min-width:761px){#panelClose{display:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div id="brand">▦ Editor 2D</div>
+    <div id="status">Cargando tileset…</div>
+    <button id="panelToggle" aria-label="Abrir herramientas">☰</button>
+    <button id="play" class="good">▶ Jugar</button>
+  </header>
+  <main id="workspace">
+    <div id="viewport"><canvas id="map"></canvas></div>
+    <aside id="panel">
+      <section class="panel-section">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <h3>Herramientas</h3><button id="panelClose" style="display:none;min-height:34px;padding:5px 10px">✕</button>
+        </div>
+        <div class="grid2">
+          <div><label for="w">Columnas</label><input id="w" type="number" value="67" min="5" max="300"></div>
+          <div><label for="h">Filas</label><input id="h" type="number" value="39" min="5" max="300"></div>
+        </div>
+        <button id="resize" class="primary" style="width:100%;margin-top:9px">↔ Crear / redimensionar</button>
+        <label for="layerSelect">Capa activa</label><select id="layerSelect"></select>
+        <div class="actions">
+          <button id="fillLevel">▧ Rellenar nivel</button>
+          <button id="clearLayer">⌫ Limpiar capa</button>
+        </div>
+        <div id="help">Toca o arrastra sobre el mapa para dibujar. Usa dos dedos para desplazarte por el mapa; en ordenador puedes usar el botón central o derecho para borrar.</div>
+      </section>
+      <section class="panel-section">
+        <h3>Tileset / sprites</h3>
+        <label for="tilesetInput">Cargar imagen de tileset</label>
+        <input id="tilesetInput" type="file" accept="image/*">
+        <div id="palette"><img id="tilesetView" alt="Tileset"><div id="selector"></div></div>
+        <label for="tileSize">Tamaño de cada tile (px)</label><input id="tileSize" type="number" min="4" max="128" value="16">
+        <div id="help">Selecciona un tile o arrastra para elegir un patrón de varios tiles.</div>
+      </section>
+      <section class="panel-section">
+        <h3>Fondo</h3>
+        <input type="file" id="backgroundInput" accept="image/*">
+        <button id="removeBackground" style="width:100%;margin-top:8px">Quitar fondo</button>
+      </section>
+      <section class="panel-section">
+        <h3>Exportar</h3>
+        <div class="actions">
+          <button id="exportImage">↓ Imagen PNG</button>
+          <button id="export">{} JSON</button>
+        </div>
+        <textarea id="output" placeholder="Los datos JSON aparecerán aquí…"></textarea>
+        <button id="copyJson" style="width:100%">Copiar JSON</button>
+      </section>
+    </aside>
+    <div id="mobileControls">
+      <div class="pad-group">
+        <button data-key="left" aria-label="Mover izquierda">◀</button>
+        <button data-key="right" aria-label="Mover derecha">▶</button>
+      </div>
+      <button class="jump" data-key="jump" aria-label="Saltar">⬆</button>
+    </div>
+    <div id="toast"></div>
+  </main>
+</div>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const canvas = $('map'), ctx = canvas.getContext('2d'), viewport = $('viewport');
+const palette = $('palette'), tilesetView = $('tilesetView'), selector = $('selector');
+const LAYERS = [{name:'Fondo',solid:false},{name:'Colisiones',solid:true},{name:'Decoración',solid:false}];
+let TILE=16, COLS=67, ROWS=39, currentLayer=0, level=[];
+let tileset=new Image(), tilesPerRow=0, tileRows=0, tilesetReady=false;
+let selectedTile=0, selection={x:0,y:0,w:1,h:1,tiles:[[0]]}, backgroundImage=null;
+let gameMode=false, playerX=2, playerY=2, playerVX=0, playerVY=0, onGround=false;
+const keys={left:false,right:false,jump:false};
+const GRAVITY=.035, JUMP_FORCE=-.22, MOVE_SPEED=.09;
+let pointerDown=false, pointerButton=0, lastPaint='', lastPointer={x:-1,y:-1};
+let cameraFrame=0, lastTime=0, accumulator=0;
+const layerSelect=$('layerSelect');
+LAYERS.forEach((l,i)=>{const o=document.createElement('option');o.value=i;o.textContent=l.name;layerSelect.appendChild(o)});
+layerSelect.addEventListener('change',e=>currentLayer=Number(e.target.value));
+function toast(msg){const el=$('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('show'),2100)}
+function setStatus(msg){$('status').textContent=msg}
+function createMap(preserve=false){
+  const old=level;
+  level=LAYERS.map((_,li)=>Array.from({length:ROWS},(_,y)=>Array.from({length:COLS},(_,x)=>{
+    if(preserve && old[li]?.[y]?.[x]!==undefined)return old[li][y][x];return -1;
+  })));
+  canvas.width=COLS*TILE;canvas.height=ROWS*TILE;
+  $('w').value=COLS;$('h').value=ROWS;
+  playerX=Math.min(playerX,COLS-1);playerY=Math.min(playerY,ROWS-1);
+}
+function tileSource(id){return {sx:(id%tilesPerRow)*TILE,sy:Math.floor(id/tilesPerRow)*TILE}}
+function drawTile(target,id,x,y,size=TILE){
+  if(!tilesetReady||id<0)return;
+  const s=tileSource(id);
+  target.drawImage(tileset,s.sx,s.sy,TILE,TILE,x,y,size,size);
+}
+function loadTileset(src){
+  const img=new Image();
+  img.onload=()=>{
+    tileset=img;tilesetReady=true;tilesPerRow=Math.floor(img.width/TILE);tileRows=Math.floor(img.height/TILE);
+    tilesetView.src=src;tilesetView.width=img.width;tilesetView.height=img.height;
+    selector.style.left='0px';selector.style.top='0px';updateSelection(0,0,0,0);
+    selectedTile=0;selection={x:0,y:0,w:1,h:1,tiles:[[0]]};
+    setStatus(`Tileset listo · ${tilesPerRow*tileRows} tiles`);
+  };
+  img.onerror=()=>{tilesetReady=false;setStatus('No se pudo cargar el tileset')};
+  img.src=src;
+}
+$('tilesetInput').addEventListener('change',e=>{
+  const f=e.target.files[0];if(f)loadTileset(URL.createObjectURL(f));
+});
+$('tileSize').addEventListener('change',()=>{
+  const n=Math.max(4,Math.min(128,Number($('tileSize').value)||16));
+  if(tilesetReady){toast('Vuelve a cargar el tileset después de cambiar el tamaño');}
+  TILE=n;createMap(true);
+  if(tilesetReady){tilesPerRow=Math.floor(tileset.width/TILE);tileRows=Math.floor(tileset.height/TILE);tilesetView.width=tileset.width;tilesetView.height=tileset.height;}
+});
+function updateSelection(x1,y1,x2,y2){
+  if(!tilesetReady)return;
+  const maxX=Math.max(0,tilesPerRow-1),maxY=Math.max(0,tileRows-1);
+  x1=Math.max(0,Math.min(maxX,x1));x2=Math.max(0,Math.min(maxX,x2));
+  y1=Math.max(0,Math.min(maxY,y1));y2=Math.max(0,Math.min(maxY,y2));
+  selection.x=Math.min(x1,x2);selection.y=Math.min(y1,y2);
+  selection.w=Math.abs(x2-x1)+1;selection.h=Math.abs(y2-y1)+1;
+  selection.tiles=Array.from({length:selection.h},(_,y)=>Array.from({length:selection.w},(_,x)=>(selection.y+y)*tilesPerRow+selection.x+x));
+  selectedTile=selection.tiles[0][0];
+  selector.style.left=(selection.x*TILE)+'px';selector.style.top=(selection.y*TILE)+'px';
+  selector.style.width=(selection.w*TILE)+'px';selector.style.height=(selection.h*TILE)+'px';
+}
+function paletteCoords(e){
+  const r=tilesetView.getBoundingClientRect();
+  return {x:Math.floor((e.clientX-r.left)*(tilesetView.naturalWidth/r.width)/TILE),y:Math.floor((e.clientY-r.top)*(tilesetView.naturalHeight/r.height)/TILE)};
+}
+let paletteStart=null;
+palette.addEventListener('pointerdown',e=>{
+  if(!tilesetReady)return;e.preventDefault();palette.setPointerCapture(e.pointerId);
+  paletteStart=paletteCoords(e);updateSelection(paletteStart.x,paletteStart.y,paletteStart.x,paletteStart.y);
+});
+palette.addEventListener('pointermove',e=>{
+  if(!paletteStart)return;const p=paletteCoords(e);updateSelection(paletteStart.x,paletteStart.y,p.x,p.y);
+});
+palette.addEventListener('pointerup',()=>{paletteStart=null});
+palette.addEventListener('pointercancel',()=>{paletteStart=null});
+function mapCell(e){
+  const r=canvas.getBoundingClientRect();
+  return {x:Math.floor((e.clientX-r.left)*(canvas.width/r.width)/TILE),y:Math.floor((e.clientY-r.top)*(canvas.height/r.height)/TILE)};
+}
+function paintAt(x,y,erase=false){
+  if(x<0||y<0||x>=COLS||y>=ROWS||gameMode)return;
+  const stamp=`${x},${y},${erase},${currentLayer}`;
+  if(stamp===lastPaint)return;lastPaint=stamp;
+  if(erase){level[currentLayer][y][x]=-1;return}
+  for(let sy=0;sy<selection.h;sy++)for(let sx=0;sx<selection.w;sx++){
+    const tx=x+sx,ty=y+sy;
+    if(tx<COLS&&ty<ROWS)level[currentLayer][ty][tx]=selection.tiles[sy][sx];
+  }
+}
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('pointerdown',e=>{
+  if(gameMode)return;
+  pointerDown=true;pointerButton=e.button;lastPaint='';
+  canvas.setPointerCapture(e.pointerId);
+  const p=mapCell(e);paintAt(p.x,p.y,e.button===2||e.button===1);
+});
+canvas.addEventListener('pointermove',e=>{
+  const p=mapCell(e);lastPointer=p;
+  if(pointerDown&&!gameMode)paintAt(p.x,p.y,pointerButton===2||pointerButton===1);
+});
+function endPaint(){pointerDown=false;lastPaint=''}
+canvas.addEventListener('pointerup',endPaint);canvas.addEventListener('pointercancel',endPaint);
+canvas.addEventListener('pointerleave',()=>{if(!pointerDown)lastPointer={x:-1,y:-1}});
+window.addEventListener('keydown',e=>{
+  if(['ArrowLeft','ArrowRight','ArrowUp',' ','a','A','d','D','w','W'].includes(e.key))e.preventDefault();
+  if(e.key==='Escape'&&gameMode){stopGame();return}
+  if(e.key==='ArrowLeft'||e.key.toLowerCase()==='a')keys.left=true;
+  if(e.key==='ArrowRight'||e.key.toLowerCase()==='d')keys.right=true;
+  if(e.key==='ArrowUp'||e.key===' '||e.key.toLowerCase()==='w')keys.jump=true;
+});
+window.addEventListener('keyup',e=>{
+  if(e.key==='ArrowLeft'||e.key.toLowerCase()==='a')keys.left=false;
+  if(e.key==='ArrowRight'||e.key.toLowerCase()==='d')keys.right=false;
+  if(e.key==='ArrowUp'||e.key===' '||e.key.toLowerCase()==='w')keys.jump=false;
+});
+document.querySelectorAll('#mobileControls button').forEach(btn=>{
+  const k=btn.dataset.key;
+  const down=e=>{e.preventDefault();keys[k]=true;btn.classList.add('active');if(k==='jump'&&onGround){playerVY=JUMP_FORCE;onGround=false}};
+  const up=e=>{e.preventDefault();keys[k]=false;btn.classList.remove('active')};
+  btn.addEventListener('pointerdown',down);btn.addEventListener('pointerup',up);btn.addEventListener('pointercancel',up);btn.addEventListener('lostpointercapture',up);
+});
+function isSolid(x,y){
+  if(x<0||x>=COLS||y<0||y>=ROWS)return true;
+  return LAYERS.some((l,i)=>l.solid&&level[i][y][x]>=0);
+}
+function movePlayer(dt){
+  if(!gameMode)return;
+  const step=Math.min(dt,32)/16.67;
+  playerVX=keys.left?-MOVE_SPEED:keys.right?MOVE_SPEED:playerVX*.78;
+  let nx=playerX+playerVX*step;
+  if(!isSolid(Math.floor(nx),Math.floor(playerY))&&!isSolid(Math.floor(nx),Math.floor(playerY+.9)))playerX=nx;else playerVX=0;
+  if(keys.jump&&onGround){playerVY=JUMP_FORCE;onGround=false;keys.jump=false}
+  playerVY+=GRAVITY*step;
+  let ny=playerY+playerVY*step;
+  if(playerVY>=0){
+    if(!isSolid(Math.floor(playerX),Math.floor(ny+.95))&&!isSolid(Math.floor(playerX+.9),Math.floor(ny+.95))){playerY=ny;onGround=false}
+    else{playerY=Math.floor(ny);playerVY=0;onGround=true}
+  }else{
+    if(!isSolid(Math.floor(playerX),Math.floor(ny))&&!isSolid(Math.floor(playerX+.9),Math.floor(ny)))playerY=ny;
+    else playerVY=0;
+  }
+  playerX=Math.max(0,Math.min(COLS-1,playerX));playerY=Math.max(0,Math.min(ROWS-1,playerY));
+}
+function render(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(backgroundImage)ctx.drawImage(backgroundImage,0,0,canvas.width,canvas.height);
+  for(let l=0;l<level.length;l++)for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++)drawTile(ctx,level[l][y][x],x*TILE,y*TILE);
+  if(gameMode){
+    drawTile(ctx,selectedTile,playerX*TILE,playerY*TILE);
+    const maxX=Math.max(0,canvas.width-viewport.clientWidth),maxY=Math.max(0,canvas.height-viewport.clientHeight);
+    const sx=Math.max(0,Math.min(maxX,playerX*TILE-viewport.clientWidth/2+TILE/2));
+    const sy=Math.max(0,Math.min(maxY,playerY*TILE-viewport.clientHeight/2+TILE/2));
+    viewport.scrollLeft=sx;viewport.scrollTop=sy;
+  }else{
+    if(lastPointer.x>=0&&lastPointer.y>=0&&lastPointer.x<COLS&&lastPointer.y<ROWS&&tilesetReady){
+      ctx.save();ctx.globalAlpha=.55;
+      for(let sy=0;sy<selection.h;sy++)for(let sx=0;sx<selection.w;sx++)drawTile(ctx,selection.tiles[sy][sx],(lastPointer.x+sx)*TILE,(lastPointer.y+sy)*TILE);
+      ctx.restore();
+    }
+    ctx.strokeStyle='rgba(220,230,255,.13)';ctx.lineWidth=1;
+    for(let x=0;x<=COLS;x++){ctx.beginPath();ctx.moveTo(x*TILE+.5,0);ctx.lineTo(x*TILE+.5,canvas.height);ctx.stroke()}
+    for(let y=0;y<=ROWS;y++){ctx.beginPath();ctx.moveTo(0,y*TILE+.5);ctx.lineTo(canvas.width,y*TILE+.5);ctx.stroke()}
+  }
+}
+function frame(t){const dt=lastTime?t-lastTime:16.67;lastTime=t;movePlayer(dt);render();requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+function stopGame(){gameMode=false;keys.left=keys.right=keys.jump=false;$('play').textContent='▶ Jugar';$('mobileControls').style.display='none';canvas.style.cursor='crosshair';toast('Modo edición')}
+$('play').addEventListener('click',()=>{
+  if(gameMode){stopGame();return}
+  if(!tilesetReady){toast('Carga un tileset antes de jugar');return}
+  gameMode=true;playerX=1;playerY=1;playerVX=playerVY=0;onGround=false;
+  $('play').textContent='■ Editar';$('mobileControls').style.display='flex';viewport.scrollLeft=0;viewport.scrollTop=0;
+  if(window.matchMedia('(max-width:760px)').matches)$('panel').classList.remove('open');
+});
+$('resize').addEventListener('click',()=>{
+  COLS=Math.max(5,Math.min(300,Number($('w').value)||67));ROWS=Math.max(5,Math.min(300,Number($('h').value)||39));
+  createMap(true);toast(`Nivel: ${COLS} × ${ROWS}`);
+});
+$('fillLevel').addEventListener('click',()=>{
+  if(!tilesetReady)return toast('Carga un tileset primero');
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++)level[currentLayer][y][x]=selection.tiles[y%selection.h][x%selection.w];
+  toast('Capa rellenada');
+});
+$('clearLayer').addEventListener('click',()=>{level[currentLayer]=Array.from({length:ROWS},()=>Array(COLS).fill(-1));toast('Capa limpiada')});
+$('backgroundInput').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;const url=URL.createObjectURL(f),img=new Image();
+  img.onload=()=>{backgroundImage=img;toast('Fondo cargado')};img.onerror=()=>toast('No se pudo cargar el fondo');img.src=url;
+});
+$('removeBackground').addEventListener('click',()=>{backgroundImage=null;$('backgroundInput').value='';toast('Fondo eliminado')});
+function levelData(){return {version:1,tileSize:TILE,cols:COLS,rows:ROWS,layers:level,layerInfo:LAYERS.map(x=>({name:x.name,solid:x.solid})),selectedTile}}
+$('export').addEventListener('click',()=>{
+  const json=JSON.stringify(levelData(),null,2);$('output').value=json;
+  const blob=new Blob([json],{type:'application/json'});downloadBlob(blob,'nivel.json');toast('JSON exportado');
+});
+$('copyJson').addEventListener('click',async()=>{
+  const text=$('output').value||JSON.stringify(levelData(),null,2);
+  try{await navigator.clipboard.writeText(text);toast('JSON copiado')}catch(e){$('output').value=text;$('output').focus();$('output').select();toast('Selecciona y copia el JSON')}
+});
+$('exportImage').addEventListener('click',()=>{
+  if(!tilesetReady)return toast('Carga un tileset primero');
+  const out=document.createElement('canvas');out.width=canvas.width;out.height=canvas.height;const c=out.getContext('2d');
+  if(backgroundImage)c.drawImage(backgroundImage,0,0,out.width,out.height);
+  for(let l=0;l<level.length;l++)for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++)drawTile(c,level[l][y][x],x*TILE,y*TILE);
+  out.toBlob(blob=>{if(blob)downloadBlob(blob,'nivel.png');else toast('No se pudo exportar la imagen')},'image/png');
+});
+function downloadBlob(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500)}
+$('panelToggle').addEventListener('click',()=>$('panel').classList.toggle('open'));
+$('panelClose').addEventListener('click',()=>$('panel').classList.remove('open'));
+createMap();
+loadTileset('tileset.png');
+setStatus('Esperando tileset.png · también puedes cargarlo desde Herramientas');
+})();
+</script>
+</body>
+</html>
